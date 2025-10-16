@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-file-list-local
+  namespace: default
+data:
+  files.txt: |
+    # Absolute paths inside the container (mounted PVC below)
+    /data/pdfs/doc1.pdf
+    /data/pdfs/subdir/doc2.pdf
+    /data/pdfs/another/doc3.pdf
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bulk-pdf-ingest-files
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: ingest
+        image: alpine:3.19
+        command: ["/bin/sh","-lc"]
+        args:
+          - |
+            set -euo pipefail
+            apk add --no-cache curl coreutils
+            API="http://ingestor-server:8082"
+            COLLECTION_NAME="${COLLECTION_NAME:-bulk_selected_pdfs}"
+            LIST="/work/files.txt"
+
+            echo "Creating collection: ${COLLECTION_NAME}"
+            curl -sf -X POST "${API}/collection" \
+              -H "Content-Type: application/json" \
+              -d "{\"collection_name\":\"${COLLECTION_NAME}\"}" || true
+
+            successes=0; failures=0
+            while IFS= read -r f || [ -n "${f-}" ]; do
+              case "${f}" in ""|\#*) continue;; esac
+              if [ -f "${f}" ]; then
+                echo "Uploading: ${f}"
+                if curl -sf -X POST "${API}/documents" \
+                      -F "documents=@${f}" \
+                      -F "data={\"collection_name\":\"${COLLECTION_NAME}\"}"; then
+                  successes=$((successes+1))
+                else
+                  echo "Upload failed: ${f}" >&2
+                  failures=$((failures+1))
+                fi
+              else
+                echo "Missing file: ${f}" >&2
+                failures=$((failures+1))
+              fi
+            done < "${LIST}"
+
+            echo "Submitted. Successes=${successes}, Failures=${failures}"
+            echo "Note: ingestion is async; allow processing time."
+        env:
+          - name: COLLECTION_NAME
+            value: "bulk_selected_pdfs"   # change if desired
+        volumeMounts:
+          - name: pdfs
+            mountPath: /data              # your PVC files must be reachable here
+          - name: filelist
+            mountPath: /work
+      volumes:
+        - name: pdfs
+          persistentVolumeClaim:
+            claimName: pdfs-pvc           # <-- change to your PVC name
+        - name: filelist
+          configMap:
+            name: ingest-file-list-local
+            items:
+              - key: files.txt
+                path: files.txt

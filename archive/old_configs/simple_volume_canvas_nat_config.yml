@@ -1,0 +1,59 @@
+# Simple NVIDIA NeMo Agent Toolkit Configuration for Volume Canvas MCP Server
+# This configuration uses only built-in NAT tools to create a working MCP server
+
+# Define the workflow - using a simple react_agent
+workflow:
+  _type: react_agent
+  name: "volume_canvas_workflow"
+  description: "Hammerspace Volume Canvas operations workflow"
+  verbose: true
+  parse_agent_response_max_retries: 3
+
+# Define tools using only built-in NAT function types
+functions:
+  # Use built-in tools that are available
+  current_datetime:
+    _type: current_datetime
+    description: "Get current date and time"
+  
+  # Use code execution tool for custom volume canvas operations
+  volume_canvas_operations:
+    _type: code_execution
+    description: "Execute Volume Canvas operations (list volumes, files, etc.)"
+    code_template: |
+      # Volume Canvas Operations
+      import json
+      import os
+      from datetime import datetime
+      
+      # Mock data for demonstration
+      volumes = [
+          {"uuid": "vol-001", "name": "hot-storage", "type": "hot", "size_gb": 1000},
+          {"uuid": "vol-002", "name": "warm-storage", "type": "warm", "size_gb": 2000},
+          {"uuid": "vol-003", "name": "cold-storage", "type": "cold", "size_gb": 5000}
+      ]
+      
+      files = [
+          {"name": "model1.pt", "path": "/models/model1.pt", "size_mb": 500},
+          {"name": "dataset1.csv", "path": "/data/dataset1.csv", "size_mb": 100}
+      ]
+      
+      operation = "{{operation}}"
+      
+      if operation == "list_volumes":
+          result = {"volumes": volumes, "timestamp": datetime.now().isoformat()}
+      elif operation == "list_files":
+          result = {"files": files, "timestamp": datetime.now().isoformat()}
+      else:
+          result = {"message": f"Operation '{operation}' completed", "timestamp": datetime.now().isoformat()}
+      
+      print(json.dumps(result, indent=2))
+
+# LLM configuration for the agent
+llms:
+  nim_llm:
+    _type: nim
+    model_name: "meta/llama-3.1-70b-instruct"
+    temperature: 0.0
+    nvidia_api_key: "${NVIDIA_API_KEY}"
+

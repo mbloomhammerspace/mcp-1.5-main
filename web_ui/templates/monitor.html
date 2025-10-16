@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Ingest Monitor - Hammerspace MCP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .nav-links {
+            margin-top: 16px;
+        }
+
+        .nav-links a {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-right: 8px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .nav-links a:hover {
+            background: #5a67d8;
+        }
+
+        .stats-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            color: #718096;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .stat-card .status {
+            margin-top: 4px;
+            font-size: 14px;
+        }
+
+        .status.running {
+            color: #48bb78;
+        }
+
+        .status.stopped {
+            color: #f56565;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .controls h2 {
+            color: #2d3748;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            color: #4a5568;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .filter-group button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .filter-group button:hover {
+            background: #5a67d8;
+        }
+
+        .filter-group button.secondary {
+            background: #718096;
+        }
+
+        .filter-group button.secondary:hover {
+            background: #4a5568;
+        }
+
+        .events-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .events-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .events-header h2 {
+            color: #2d3748;
+            font-size: 18px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #48bb78;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .events-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .event-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .event-card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .event-card.new-file {
+            border-left: 4px solid #48bb78;
+        }
+
+        .event-card.retroactive {
+            border-left: 4px solid #ed8936;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .event-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .event-type.new-file {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .event-type.retroactive {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+
+        .event-timestamp {
+            color: #718096;
+            font-size: 13px;
+        }
+
+        .event-filename {
+            font-size: 16px;
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .event-path {
+            font-size: 13px;
+            color: #718096;
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+
+        .event-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .detail-item {
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .detail-label {
+            font-size: 11px;
+            color: #718096;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            font-size: 13px;
+            color: #2d3748;
+            font-family: 'Courier New', monospace;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.1);
+            display: none;
+            animation: slideInRight 0.3s;
+            z-index: 1000;
+            max-width: 400px;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+            }
+            to {
+                transform: translateX(0);
+            }
+        }
+
+        .toast.show {
+            display: block;
+        }
+
+        .toast-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #718096;
+            cursor: pointer;
+        }
+
+        .toast-body {
+            color: #4a5568;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 File Ingest Monitor</h1>
+            <p>Real-time tracking of file ingestion and tagging events</p>
+            <div class="nav-links">
+                <a href="/">← Back to Chat</a>
+                <a href="/debug">Debug Console</a>
+            </div>
+        </div>
+
+        <div class="stats-panel">
+            <div class="stat-card">
+                <h3>Monitor Status</h3>
+                <div id="monitor-status" class="value">...</div>
+                <div id="monitor-status-text" class="status">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Events</h3>
+                <div id="total-events" class="value">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Files Tagged</h3>
+                <div id="files-tagged" class="value">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Watched Paths</h3>
+                <div id="watched-paths" class="value">0</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <h2>🔍 Filters</h2>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>Event Type</label>
+                    <select id="filter-event-type">
+                        <option value="">All Events</option>
+                        <option value="NEW_FILE">New Files Only</option>
+                        <option value="RETROACTIVE_TAG">Retroactive Tags Only</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>File Name Pattern</label>
+                    <input type="text" id="filter-file-pattern" placeholder="e.g., .pdf, test-">
+                </div>
+                <div class="filter-group">
+                    <label>Limit</label>
+                    <input type="number" id="filter-limit" value="100" min="10" max="1000">
+                </div>
+                <div class="filter-group">
+                    <button onclick="loadEvents()">🔄 Refresh</button>
+                </div>
+                <div class="filter-group">
+                    <button class="secondary" onclick="clearEvents()">🗑️ Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="events-panel">
+            <div class="events-header">
+                <h2>📁 Recent Events</h2>
+                <div class="live-indicator">
+                    <div class="live-dot"></div>
+                    <span id="live-status">Live</span>
+                </div>
+            </div>
+            <div id="events-list" class="events-list">
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p>Loading events...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">
+        <div class="toast-header">
+            <span class="toast-title">New File Ingested</span>
+            <button class="toast-close" onclick="hideToast()">×</button>
+        </div>
+        <div class="toast-body" id="toast-body"></div>
+    </div>
+
+    <script>
+        let lastEventTimestamp = null;
+        let eventSource = null;
+
+        // Load monitor status
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/monitor/status');
+                const data = await response.json();
+                
+                document.getElementById('monitor-status').textContent = data.running ? '✓' : '✗';
+                document.getElementById('monitor-status-text').textContent = data.running ? 'Running' : 'Stopped';
+                document.getElementById('monitor-status-text').className = data.running ? 'status running' : 'status stopped';
+                document.getElementById('files-tagged').textContent = data.tagged_files_count || 0;
+                document.getElementById('watched-paths').textContent = data.watch_paths ? data.watch_paths.length : 0;
+            } catch (error) {
+                console.error('Error loading status:', error);
+            }
+        }
+
+        // Load events
+        async function loadEvents() {
+            const eventType = document.getElementById('filter-event-type').value;
+            const filePattern = document.getElementById('filter-file-pattern').value;
+            const limit = document.getElementById('filter-limit').value;
+
+            try {
+                const params = new URLSearchParams({
+                    limit: limit,
+                    event_type: eventType,
+                    file_pattern: filePattern
+                });
+
+                const response = await fetch(`/api/monitor/events?${params}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayEvents(data.events);
+                    document.getElementById('total-events').textContent = data.count;
+                    if (data.events.length > 0) {
+                        lastEventTimestamp = data.events[0].timestamp;
+                    }
+                } else {
+                    console.error('Error loading events:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading events:', error);
+            }
+        }
+
+        // Display events
+        function displayEvents(events) {
+            const eventsList = document.getElementById('events-list');
+            
+            if (events.length === 0) {
+                eventsList.innerHTML = `
+                    <div class="empty-state">
+                        <p>No events found matching your filters</p>
+                    </div>
+                `;
+                return;
+            }
+
+            eventsList.innerHTML = '';
+            events.forEach(event => {
+                eventsList.appendChild(createEventCard(event));
+            });
+        }
+
+        // Create event card
+        function createEventCard(event) {
+            const card = document.createElement('div');
+            const eventType = event.event_type === 'NEW_FILE' ? 'new-file' : 'retroactive';
+            card.className = `event-card ${eventType}`;
+            
+            const timestamp = new Date(event.timestamp).toLocaleString();
+            const size = formatFileSize(event.size_bytes);
+            
+            card.innerHTML = `
+                <div class="event-header">
+                    <span class="event-type ${eventType}">${event.event_type.replace('_', ' ')}</span>
+                    <span class="event-timestamp">${timestamp}</span>
+                </div>
+                <div class="event-filename">${event.file_name}</div>
+                <div class="event-path">${event.file_path}</div>
+                <div class="event-details">
+                    <div class="detail-item">
+                        <div class="detail-label">MD5 Hash (ingestid)</div>
+                        <div class="detail-value">${event.md5_hash.substring(0, 16)}...</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">MIME Type (mimeid)</div>
+                        <div class="detail-value">${event.mime_type}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">File Size</div>
+                        <div class="detail-value">${size}</div>
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+        }
+
+        // Show toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-body').textContent = message;
+            toast.classList.add('show');
+            setTimeout(hideToast, 5000);
+        }
+
+        // Hide toast
+        function hideToast() {
+            document.getElementById('toast').classList.remove('show');
+        }
+
+        // Clear events display
+        function clearEvents() {
+            document.getElementById('events-list').innerHTML = `
+                <div class="empty-state">
+                    <p>No events to display</p>
+                </div>
+            `;
+            document.getElementById('total-events').textContent = '0';
+        }
+
+        // Start live streaming (optional - using SSE)
+        function startLiveStream() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/api/monitor/events/stream');
+            
+            eventSource.onmessage = function(e) {
+                try {
+                    const event = JSON.parse(e.data);
+                    if (event.error) {
+                        console.error('Stream error:', event.error);
+                        return;
+                    }
+                    
+                    // Prepend new event to list
+                    const eventsList = document.getElementById('events-list');
+                    const firstChild = eventsList.firstChild;
+                    
+                    // Remove empty state if present
+                    if (firstChild && firstChild.classList.contains('empty-state')) {
+                        eventsList.innerHTML = '';
+                    }
+                    
+                    eventsList.insertBefore(createEventCard(event), eventsList.firstChild);
+                    
+                    // Update count
+                    const currentCount = parseInt(document.getElementById('total-events').textContent);
+                    document.getElementById('total-events').textContent = currentCount + 1;
+                    
+                    // Show toast
+                    showToast(`New file: ${event.file_name}`);
+                    
+                    // Limit to 100 events in DOM
+                    while (eventsList.children.length > 100) {
+                        eventsList.removeChild(eventsList.lastChild);
+                    }
+                } catch (error) {
+                    console.error('Error parsing event:', error);
+                }
+            };
+            
+            eventSource.onerror = function() {
+                console.error('EventSource error');
+                document.getElementById('live-status').textContent = 'Reconnecting...';
+                setTimeout(() => {
+                    document.getElementById('live-status').textContent = 'Live';
+                }, 3000);
+            };
+        }
+
+        // Initialize
+        window.onload = function() {
+            loadStatus();
+            loadEvents();
+            startLiveStream();
+            
+            // Refresh status every 5 seconds
+            setInterval(loadStatus, 5000);
+        };
+
+        // Cleanup on page unload
+        window.onbeforeunload = function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        };
+    </script>
+</body>
+</html>
+

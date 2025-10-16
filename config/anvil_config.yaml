@@ -1,0 +1,17 @@
+name: "anvil_new_install"
+description: "New Anvil installation at 150.136.225.57:8443"
+created: "2025-10-15T15:30:00Z"
+last_modified: "2025-10-15T15:30:00Z"
+
+# Hammerspace API Configuration
+base_url: "https://150.136.225.57:8443"
+username: "admin"
+password: "Passw0rd1"
+verify_ssl: false  # Disable SSL verification for self-signed certificates
+timeout: 30
+
+# API endpoints (will be discovered)
+api_version: "v1"
+shares_endpoint: "/api/v1/shares"
+volumes_endpoint: "/api/v1/volumes"
+exports_endpoint: "/api/v1/exports"

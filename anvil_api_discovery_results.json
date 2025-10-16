@@ -1,0 +1,46 @@
+{
+  "timestamp": "2025-10-15T15:35:16.780415",
+  "anvil_host": "150.136.225.57",
+  "anvil_port": "8443",
+  "base_url": "https://150.136.225.57:8443",
+  "endpoints_tested": {
+    "get_nodes": {
+      "success": false,
+      "error": "API call 'get_nodes' failed: Failed to get nodes: API error 404: "
+    },
+    "get_storage_volumes": {
+      "success": false,
+      "error": "Failed to get storage volumes: API error 404: "
+    },
+    "get_object_storage_volumes": {
+      "success": false,
+      "error": "Failed to get object storage volumes: API error 404: "
+    },
+    "get_objectives": {
+      "success": false,
+      "error": "API call 'get_objectives' failed: Failed to get objectives: API error 404: "
+    },
+    "get_objective_templates": {
+      "success": false,
+      "error": "object list can't be used in 'await' expression"
+    },
+    "get_tasks": {
+      "success": false,
+      "error": "Failed to get tasks: API error 404: "
+    },
+    "get_data_movement_jobs": {
+      "success": false,
+      "error": "API call 'get_data_movement_jobs' failed: Failed to get data movement jobs: API error 404: "
+    }
+  },
+  "successful_endpoints": [],
+  "failed_endpoints": [
+    "get_nodes",
+    "get_storage_volumes",
+    "get_object_storage_volumes",
+    "get_objectives",
+    "get_objective_templates",
+    "get_tasks",
+    "get_data_movement_jobs"
+  ]
+}

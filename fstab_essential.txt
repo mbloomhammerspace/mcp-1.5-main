@@ -1,0 +1,10 @@
+# Essential Hammerspace NFS Mounts for MCP Operations
+# Copy these entries to /etc/fstab on the jump host
+
+# SE Lab Hammerspace (10.200.120.90) - Primary target for MCP operations
+10.200.120.90:/modelstore /mnt/se-lab/modelstore nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/upload /mnt/se-lab/upload nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/ /mnt/se-lab/root nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+
+# Production Hammerspace (10.200.10.120) - For reference
+10.200.10.120:/bloom /mnt/hammerspace nfs4 rw,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0

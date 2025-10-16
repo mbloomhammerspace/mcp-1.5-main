@@ -1,0 +1,330 @@
+# NVIDIA NeMo Agent Toolkit Configuration for Volume Canvas MCP Server
+# This configuration defines the workflow and tools for the Volume Canvas MCP server
+
+# Define the workflow
+workflow:
+  _type: react_agent
+  name: "volume_canvas_workflow"
+  description: "Hammerspace Volume Canvas operations workflow"
+  verbose: true
+  parse_agent_response_max_retries: 3
+
+# Define tools (functions) that will be available as MCP endpoints
+functions:
+  # Volume Management Functions
+  list_volumes:
+    _type: volume_management
+    description: "List all storage volumes with categorization"
+    parameters:
+      filter:
+        type: string
+        default: "all"
+        description: "Filter volumes by category (all, hot, warm, cold, archive)"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query (production, staging, development)"
+  
+  list_shares:
+    _type: volume_management
+    description: "List all shares for a given volume"
+    parameters:
+      volume_uuid:
+        type: string
+        required: true
+        description: "UUID of the volume to list shares for"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query"
+  
+  # File Management Functions
+  list_files:
+    _type: file_management
+    description: "List files in a specific path"
+    parameters:
+      path:
+        type: string
+        required: true
+        description: "Path to list files from"
+      limit:
+        type: integer
+        default: 100
+        description: "Maximum number of files to return"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query"
+  
+  search_files:
+    _type: file_management
+    description: "Search for files using various criteria"
+    parameters:
+      query:
+        type: string
+        required: true
+        description: "Search query string"
+      search_by_tags:
+        type: boolean
+        default: true
+        description: "Search by file tags"
+      search_by_path:
+        type: boolean
+        default: true
+        description: "Search by file path"
+      case_sensitive:
+        type: boolean
+        default: false
+        description: "Case sensitive search"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query"
+  
+  # Data Movement Functions
+  copy_files:
+    _type: data_movement
+    description: "Copy files from source to target volume"
+    parameters:
+      source_type:
+        type: string
+        required: true
+        description: "Source volume type (hot, warm, cold, archive)"
+      target_type:
+        type: string
+        required: true
+        description: "Target volume type (hot, warm, cold, archive)"
+      path:
+        type: string
+        required: true
+        description: "Path to copy"
+      recursive:
+        type: boolean
+        default: true
+        description: "Copy recursively"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  clone_files:
+    _type: data_movement
+    description: "Clone files from source to target volume"
+    parameters:
+      source_type:
+        type: string
+        required: true
+        description: "Source volume type"
+      target_type:
+        type: string
+        required: true
+        description: "Target volume type"
+      path:
+        type: string
+        required: true
+        description: "Path to clone"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  move_files:
+    _type: data_movement
+    description: "Move files from source to target volume"
+    parameters:
+      source_type:
+        type: string
+        required: true
+        description: "Source volume type"
+      target_type:
+        type: string
+        required: true
+        description: "Target volume type"
+      path:
+        type: string
+        required: true
+        description: "Path to move"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  # Objective Management Functions
+  place_on_tier:
+    _type: objective_management
+    description: "Create a place-on-tier objective"
+    parameters:
+      volume_type:
+        type: string
+        required: true
+        description: "Volume type to place on tier"
+      path:
+        type: string
+        required: true
+        description: "Path to place on tier"
+      tier_name:
+        type: string
+        required: true
+        description: "Name of the tier"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  exclude_from_tier:
+    _type: objective_management
+    description: "Create an exclude-from-tier objective"
+    parameters:
+      volume_type:
+        type: string
+        required: true
+        description: "Volume type to exclude from tier"
+      path:
+        type: string
+        required: true
+        description: "Path to exclude from tier"
+      tier_name:
+        type: string
+        required: true
+        description: "Name of the tier"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  # Job Management Functions
+  list_jobs:
+    _type: job_management
+    description: "List all active data movement jobs"
+    parameters:
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query"
+      status_filter:
+        type: string
+        default: "all"
+        description: "Filter jobs by status (all, running, completed, failed)"
+  
+  get_job_status:
+    _type: job_management
+    description: "Get detailed status of a specific job"
+    parameters:
+      job_uuid:
+        type: string
+        required: true
+        description: "UUID of the job to get status for"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query"
+  
+  # Tag Management Functions
+  get_tags:
+    _type: tag_management
+    description: "Get tags for a specific file, folder, or share"
+    parameters:
+      path:
+        type: string
+        required: true
+        description: "Path to get tags for"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to query"
+  
+  set_tag:
+    _type: tag_management
+    description: "Set a tag on a file, folder, or share"
+    parameters:
+      path:
+        type: string
+        required: true
+        description: "Path to set tag on"
+      tag_name:
+        type: string
+        required: true
+        description: "Name of the tag"
+      tag_value:
+        type: string
+        required: true
+        description: "Value of the tag"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  clear_all_tags:
+    _type: tag_management
+    description: "Clear all tags from a file, folder, or share"
+    parameters:
+      path:
+        type: string
+        required: true
+        description: "Path to clear tags from"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to operate on"
+  
+  # System Analysis Functions
+  get_system_status:
+    _type: system_analysis
+    description: "Get overall system status and health"
+    parameters:
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to analyze"
+  
+  analyze_volume_constraints:
+    _type: system_analysis
+    description: "Analyze volume constraints and capacity"
+    parameters:
+      volume_type:
+        type: string
+        required: true
+        description: "Volume type to analyze"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to analyze"
+  
+  # Debug and Diagnostic Functions
+  get_objective_debug_info:
+    _type: debug_diagnostics
+    description: "Get debug information for objectives"
+    parameters:
+      objective_name:
+        type: string
+        default: ""
+        description: "Name of objective to debug (empty for all)"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to debug"
+  
+  verify_data_integrity:
+    _type: debug_diagnostics
+    description: "Verify data integrity on a volume"
+    parameters:
+      volume_type:
+        type: string
+        required: true
+        description: "Volume type to verify"
+      path:
+        type: string
+        required: true
+        description: "Path to verify"
+      storage_system:
+        type: string
+        default: "production"
+        description: "Storage system to verify"
+
+# LLM configuration (optional - for agent reasoning)
+llms:
+  nim_llm:
+    _type: nim
+    model_name: "meta/llama-3.1-70b-instruct"
+    temperature: 0.0
+    nvidia_api_key: "${NVIDIA_API_KEY}"

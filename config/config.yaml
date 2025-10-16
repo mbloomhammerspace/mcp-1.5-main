@@ -1,0 +1,17 @@
+# Main configuration file for MCP 1.5
+hammerspace:
+  base_url: "https://150.136.225.57:8443"  # Public IP for API
+  private_ip: "10.0.0.165"  # Private IP for NFS mounts
+  username: "admin"
+  password: "Passw0rd1"
+  verify_ssl: false
+  timeout: 30
+
+mcp:
+  server_name: "AIQ HSTK MCP Server"
+  version: "1.5"
+  log_level: "INFO"
+
+development:
+  debug: false
+  test_mode: false

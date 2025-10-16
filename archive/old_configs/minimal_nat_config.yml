@@ -1,0 +1,29 @@
+# Minimal NVIDIA NeMo Agent Toolkit Configuration
+# Based on the Hello World example from NAT documentation
+
+functions:
+  # Add a simple tool
+  volume_canvas_tool:
+    _type: current_datetime
+    description: "Get current date and time for Volume Canvas operations"
+
+llms:
+  # Tell NAT which LLM to use for the agent
+  nim_llm:
+    _type: nim
+    model_name: meta/llama-3.1-70b-instruct
+    temperature: 0.0
+    nvidia_api_key: "${NVIDIA_API_KEY}"
+
+workflow:
+  # Use an agent that 'reasons' and 'acts'
+  _type: react_agent
+  # Give it access to our tool
+  tool_names: [volume_canvas_tool]
+  # Tell it which LLM to use
+  llm_name: nim_llm
+  # Make it verbose
+  verbose: true
+  # Retry up to 3 times
+  parse_agent_response_max_retries: 3
+

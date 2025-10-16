@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Emission Console - Hammerspace MCP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 20px 20px 0 0;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.disconnected {
+            background: #dc3545;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6c757d;
+        }
+        
+        .filter-select, .filter-input {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .events-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 30px;
+            background: #f8f9fa;
+        }
+        
+        .event-item {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #dee2e6;
+            transition: all 0.2s;
+        }
+        
+        .event-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+        
+        .event-item.new-file {
+            border-left-color: #007bff;
+        }
+        
+        .event-item.retroactive-tag {
+            border-left-color: #6c757d;
+        }
+        
+        .event-item.pdf-ingest-success {
+            border-left-color: #28a745;
+        }
+        
+        .event-item.pdf-ingest-failure {
+            border-left-color: #dc3545;
+        }
+        
+        .event-item.pdf-embedding-success {
+            border-left-color: #28a745;
+        }
+        
+        .event-item.pdf-embedding-failure {
+            border-left-color: #dc3545;
+        }
+        
+        .event-item.milvus-embeddings-confirmed {
+            border-left-color: #17a2b8;
+        }
+        
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .event-type {
+            font-weight: 600;
+            font-size: 14px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .event-type.new-file {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .event-type.retroactive-tag {
+            background: #f5f5f5;
+            color: #616161;
+        }
+        
+        .event-type.pdf-ingest-success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        
+        .event-type.pdf-ingest-failure {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .event-type.pdf-embedding-success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        
+        .event-type.pdf-embedding-failure {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .event-type.milvus-embeddings-confirmed {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        
+        .event-timestamp {
+            font-size: 12px;
+            color: #6c757d;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        
+        .event-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .event-field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .event-field.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .event-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .event-value {
+            font-size: 14px;
+            color: #333;
+            word-break: break-all;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        
+        .event-value.file-path {
+            color: #007bff;
+            cursor: pointer;
+        }
+        
+        .event-value.file-path:hover {
+            text-decoration: underline;
+        }
+        
+        .event-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .stats-bar {
+            background: white;
+            padding: 15px 30px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        
+        .stats-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .stats-number {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .header {
+                border-radius: 0;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-controls {
+                justify-content: center;
+            }
+            
+            .event-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📡 Event Emission Console</h1>
+            <p>Real-time events from Hammerspace MCP Server</p>
+        </div>
+        
+        <div class="controls">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connected</span>
+            </div>
+            
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label>Event Type</label>
+                    <select class="filter-select" id="eventTypeFilter">
+                        <option value="">All Events</option>
+                        <option value="NEW_FILE">New Files</option>
+                        <option value="RETROACTIVE_TAG">Retroactive Tags</option>
+                        <option value="PDF_INGEST_SUCCESS">PDF Ingest Success</option>
+                        <option value="PDF_INGEST_FAILURE">PDF Ingest Failure</option>
+                        <option value="PDF_EMBEDDING_SUCCESS">PDF Embedding Success</option>
+                        <option value="PDF_EMBEDDING_FAILURE">PDF Embedding Failure</option>
+                        <option value="MILVUS_EMBEDDINGS_CONFIRMED">Milvus Embeddings Confirmed</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label>File Path</label>
+                    <input type="text" class="filter-input" id="filePathFilter" placeholder="Filter by path...">
+                </div>
+                
+                <div class="filter-group">
+                    <label>Actions</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="refreshEvents()">🔄 Refresh</button>
+                        <button class="btn btn-secondary" onclick="clearEvents()">🗑️ Clear</button>
+                        <button class="btn btn-success" onclick="toggleAutoRefresh()" id="autoRefreshBtn">⏸️ Auto Refresh</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="events-container" id="eventsContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading events...</p>
+            </div>
+        </div>
+        
+        <div class="stats-bar">
+            <div class="stats-item">
+                <span>Total Events:</span>
+                <span class="stats-number" id="totalEvents">0</span>
+            </div>
+            <div class="stats-item">
+                <span>New Files:</span>
+                <span class="stats-number" id="newFilesCount">0</span>
+            </div>
+            <div class="stats-item">
+                <span>PDF Ingest Jobs:</span>
+                <span class="stats-number" id="pdfIngestCount">0</span>
+            </div>
+            <div class="stats-item">
+                <span>Last Update:</span>
+                <span class="stats-number" id="lastUpdate">Never</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let events = [];
+        let autoRefresh = true;
+        let refreshInterval;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadEvents();
+            startAutoRefresh();
+            
+            // Set up filters
+            document.getElementById('eventTypeFilter').addEventListener('change', filterEvents);
+            document.getElementById('filePathFilter').addEventListener('input', filterEvents);
+        });
+        
+        async function loadEvents() {
+            try {
+                const response = await fetch('/api/events');
+                const data = await response.json();
+                
+                if (data.success) {
+                    events = data.events || [];
+                    updateStatus(true);
+                    renderEvents();
+                    updateStats();
+                } else {
+                    updateStatus(false);
+                    showError('Failed to load events: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                updateStatus(false);
+                showError('Connection error: ' + error.message);
+            }
+        }
+        
+        function renderEvents() {
+            const container = document.getElementById('eventsContainer');
+            const filteredEvents = getFilteredEvents();
+            
+            if (filteredEvents.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No events found</h3>
+                        <p>Try adjusting your filters or check if the MCP server is running.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = filteredEvents.map(event => createEventHTML(event)).join('');
+        }
+        
+        function createEventHTML(event) {
+            const eventClass = getEventClass(event.event_type);
+            const typeClass = getTypeClass(event.event_type);
+            
+            return `
+                <div class="event-item ${eventClass}">
+                    <div class="event-header">
+                        <span class="event-type ${typeClass}">${event.event_type}</span>
+                        <span class="event-timestamp">${formatTimestamp(event.timestamp)}</span>
+                    </div>
+                    
+                    <div class="event-content">
+                        ${event.file_name ? `
+                            <div class="event-field">
+                                <span class="event-label">File Name</span>
+                                <span class="event-value">${event.file_name}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.file_path ? `
+                            <div class="event-field">
+                                <span class="event-label">File Path</span>
+                                <span class="event-value file-path" onclick="copyToClipboard('${event.file_path}')">${event.file_path}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.md5_hash ? `
+                            <div class="event-field">
+                                <span class="event-label">MD5 Hash</span>
+                                <span class="event-value">${event.md5_hash}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.mime_type ? `
+                            <div class="event-field">
+                                <span class="event-label">MIME Type</span>
+                                <span class="event-value">${event.mime_type}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.size_bytes ? `
+                            <div class="event-field">
+                                <span class="event-label">Size</span>
+                                <span class="event-value">${formatBytes(event.size_bytes)}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.status ? `
+                            <div class="event-field">
+                                <span class="event-label">Status</span>
+                                <span class="event-value">${event.status}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.collection_name ? `
+                            <div class="event-field">
+                                <span class="event-label">Collection</span>
+                                <span class="event-value">${event.collection_name}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${event.ingest_time ? `
+                            <div class="event-field full-width">
+                                <span class="event-label">Ingest Time</span>
+                                <span class="event-value">${formatTimestamp(event.ingest_time)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="event-actions">
+                        <button class="btn btn-secondary" onclick="copyEventData('${JSON.stringify(event).replace(/'/g, "\\'")}')">📋 Copy Data</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function getEventClass(eventType) {
+            switch (eventType) {
+                case 'NEW_FILE': return 'new-file';
+                case 'RETROACTIVE_TAG': return 'retroactive-tag';
+                case 'PDF_INGEST_SUCCESS': return 'pdf-ingest-success';
+                case 'PDF_INGEST_FAILURE': return 'pdf-ingest-failure';
+                case 'PDF_EMBEDDING_SUCCESS': return 'pdf-embedding-success';
+                case 'PDF_EMBEDDING_FAILURE': return 'pdf-embedding-failure';
+                case 'MILVUS_EMBEDDINGS_CONFIRMED': return 'milvus-embeddings-confirmed';
+                default: return '';
+            }
+        }
+        
+        function getTypeClass(eventType) {
+            switch (eventType) {
+                case 'NEW_FILE': return 'new-file';
+                case 'RETROACTIVE_TAG': return 'retroactive-tag';
+                case 'PDF_INGEST_SUCCESS': return 'pdf-ingest-success';
+                case 'PDF_INGEST_FAILURE': return 'pdf-ingest-failure';
+                case 'PDF_EMBEDDING_SUCCESS': return 'pdf-embedding-success';
+                case 'PDF_EMBEDDING_FAILURE': return 'pdf-embedding-failure';
+                case 'MILVUS_EMBEDDINGS_CONFIRMED': return 'milvus-embeddings-confirmed';
+                default: return '';
+            }
+        }
+        
+        function getFilteredEvents() {
+            const typeFilter = document.getElementById('eventTypeFilter').value;
+            const pathFilter = document.getElementById('filePathFilter').value.toLowerCase();
+            
+            return events.filter(event => {
+                const typeMatch = !typeFilter || event.event_type === typeFilter;
+                const pathMatch = !pathFilter || (event.file_path && event.file_path.toLowerCase().includes(pathFilter));
+                return typeMatch && pathMatch;
+            });
+        }
+        
+        function filterEvents() {
+            renderEvents();
+        }
+        
+        function updateStats() {
+            const totalEvents = events.length;
+            const newFilesCount = events.filter(e => e.event_type === 'NEW_FILE').length;
+            const pdfIngestCount = events.filter(e => e.event_type.includes('PDF_INGEST')).length;
+            const pdfEmbeddingCount = events.filter(e => e.event_type.includes('PDF_EMBEDDING')).length;
+            const milvusConfirmedCount = events.filter(e => e.event_type === 'MILVUS_EMBEDDINGS_CONFIRMED').length;
+            
+            document.getElementById('totalEvents').textContent = totalEvents;
+            document.getElementById('newFilesCount').textContent = newFilesCount;
+            document.getElementById('pdfIngestCount').textContent = pdfIngestCount + pdfEmbeddingCount + milvusConfirmedCount;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+        
+        function updateStatus(connected) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            if (connected) {
+                statusDot.classList.remove('disconnected');
+                statusText.textContent = 'Connected';
+            } else {
+                statusDot.classList.add('disconnected');
+                statusText.textContent = 'Disconnected';
+            }
+        }
+        
+        function showError(message) {
+            const container = document.getElementById('eventsContainer');
+            container.innerHTML = `
+                <div class="empty-state">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                    <button class="btn btn-primary" onclick="loadEvents()">Try Again</button>
+                </div>
+            `;
+        }
+        
+        function refreshEvents() {
+            loadEvents();
+        }
+        
+        function clearEvents() {
+            if (confirm('Are you sure you want to clear all events?')) {
+                events = [];
+                renderEvents();
+                updateStats();
+            }
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const btn = document.getElementById('autoRefreshBtn');
+            
+            if (autoRefresh) {
+                btn.textContent = '⏸️ Auto Refresh';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-success');
+                startAutoRefresh();
+            } else {
+                btn.textContent = '▶️ Auto Refresh';
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-danger');
+                stopAutoRefresh();
+            }
+        }
+        
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(loadEvents, 5000); // Refresh every 5 seconds
+        }
+        
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+        
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp).toLocaleString();
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show brief success feedback
+                const element = event.target;
+                const originalText = element.textContent;
+                element.textContent = 'Copied!';
+                element.style.color = '#28a745';
+                setTimeout(() => {
+                    element.textContent = originalText;
+                    element.style.color = '#007bff';
+                }, 1000);
+            });
+        }
+        
+        function copyEventData(data) {
+            navigator.clipboard.writeText(data).then(() => {
+                alert('Event data copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>

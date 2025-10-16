@@ -1,0 +1,41 @@
+# Example Kubernetes Job that can be managed by the MCP Server
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mcp-managed-job
+  namespace: default
+  labels:
+    app: mcp-example
+    managed-by: mcp-server
+spec:
+  template:
+    metadata:
+      labels:
+        app: mcp-example
+    spec:
+      containers:
+      - name: worker
+        image: python:3.9-slim
+        command: ["python", "-c"]
+        args:
+          - |
+            import time
+            import os
+            print(f"Starting job at {time.ctime()}")
+            print(f"Environment: {os.environ.get('JOB_ENV', 'default')}")
+            print("Processing data...")
+            time.sleep(10)  # Simulate work
+            print("Job completed successfully!")
+        env:
+        - name: JOB_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      restartPolicy: Never
+  backoffLimit: 3
+  activeDeadlineSeconds: 300  # 5 minutes timeout

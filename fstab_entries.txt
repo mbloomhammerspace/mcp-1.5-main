@@ -1,0 +1,19 @@
+# Hammerspace NFS Mounts - Production Environment
+# Copy these entries to /etc/fstab on the jump host
+
+# Production Hammerspace (10.200.10.120)
+10.200.10.120:/bloom /mnt/hammerspace nfs4 rw,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0
+10.200.10.120:/ /mnt/production/root nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0
+10.200.10.120:/MLPerf /mnt/production/MLPerf nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0
+10.200.10.120:/smbnfs_example /mnt/production/smbnfs_example nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0
+10.200.10.120:/nfs4_2 /mnt/production/nfs4_2 nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0
+10.200.10.120:/opmtesting /mnt/production/opmtesting nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.10.120 0 0
+
+# SE Lab Hammerspace (10.200.120.90) - Primary target for MCP operations
+10.200.120.90:/ /mnt/se-lab/root nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/Milvuss3 /mnt/se-lab/Milvuss3 nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/modelstore /mnt/se-lab/modelstore nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/upload /mnt/se-lab/upload nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/audio /mnt/se-lab/audio nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/hub /mnt/se-lab/hub nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
+10.200.120.90:/tier0 /mnt/se-lab/tier0 nfs4 rw,relatime,vers=4.2,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=14,retrans=2,sec=sys,clientaddr=10.200.120.94,local_lock=none,addr=10.200.120.90 0 0
