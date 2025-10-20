@@ -196,20 +196,36 @@
             border-left-color: #64748b;
         }
         
-        .event-item.pdf-ingest-success {
+        .event-item.document-ingest-success {
             border-left-color: #059669;
         }
         
-        .event-item.pdf-ingest-failure {
+        .event-item.document-ingest-failure {
             border-left-color: #dc2626;
         }
         
-        .event-item.pdf-embedding-success {
+        .event-item.document-embedding-success {
             border-left-color: #059669;
         }
         
-        .event-item.pdf-embedding-failure {
+        .event-item.document-embedding-failure {
             border-left-color: #dc2626;
+        }
+        
+        .event-item.folder-ingest-success {
+            border-left-color: #059669;
+        }
+        
+        .event-item.folder-ingest-failure {
+            border-left-color: #dc2626;
+        }
+        
+        .event-item.tier0-promotion {
+            border-left-color: #3b82f6;
+        }
+        
+        .event-item.tier0-demotion {
+            border-left-color: #64748b;
         }
         
         .event-item.milvus-embeddings-confirmed {
@@ -242,24 +258,44 @@
             color: #475569;
         }
         
-        .event-type.pdf-ingest-success {
+        .event-type.document-ingest-success {
             background: #dcfce7;
             color: #166534;
         }
         
-        .event-type.pdf-ingest-failure {
+        .event-type.document-ingest-failure {
             background: #fef2f2;
             color: #dc2626;
         }
         
-        .event-type.pdf-embedding-success {
+        .event-type.document-embedding-success {
             background: #dcfce7;
             color: #166534;
         }
         
-        .event-type.pdf-embedding-failure {
+        .event-type.document-embedding-failure {
             background: #fef2f2;
             color: #dc2626;
+        }
+        
+        .event-type.folder-ingest-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .event-type.folder-ingest-failure {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        
+        .event-type.tier0-promotion {
+            background: #dbeafe;
+            color: #1e3a8a;
+        }
+        
+        .event-type.tier0-demotion {
+            background: #f1f5f9;
+            color: #475569;
         }
         
         .event-type.milvus-embeddings-confirmed {
@@ -419,10 +455,16 @@
                         <option value="">All Events</option>
                         <option value="NEW_FILES">New Files</option>
                         <option value="RETROACTIVE_TAG">Retroactive Tags</option>
-                        <option value="PDF_INGEST_SUCCESS">PDF Ingest Success</option>
-                        <option value="PDF_INGEST_FAILURE">PDF Ingest Failure</option>
-                        <option value="PDF_EMBEDDING_SUCCESS">PDF Embedding Success</option>
-                        <option value="PDF_EMBEDDING_FAILURE">PDF Embedding Failure</option>
+                        <option value="NV_INGEST_SUCCESS">Document Ingest Success</option>
+                        <option value="NV_INGEST_FAILURE">Document Ingest Failure</option>
+                        <option value="NV_INGEST_EMBEDDING_SUCCESS">Document Embedding Success</option>
+                        <option value="NV_INGEST_EMBEDDING_FAILURE">Document Embedding Failure</option>
+                        <option value="FOLDER_INGEST_SUCCESS">Folder Ingest Success</option>
+                        <option value="FOLDER_INGEST_FAILURE">Folder Ingest Failure</option>
+                        <option value="TIER0_PROMOTION">Tier0 Promotion</option>
+                        <option value="TIER0_PROMOTION_BY_TAG">Tier0 Promotion by Tag</option>
+                        <option value="TIER0_DEMOTION">Tier0 Demotion</option>
+                        <option value="TIER0_DEMOTION_BY_TAG">Tier0 Demotion by Tag</option>
                         <option value="MILVUS_EMBEDDINGS_CONFIRMED">Milvus Embeddings Confirmed</option>
                     </select>
                 </div>
@@ -460,7 +502,7 @@
                 <span class="stats-number" id="newFilesCount">0</span>
             </div>
             <div class="stats-item">
-                <span>PDF Ingest Jobs:</span>
+                <span>Processing Jobs:</span>
                 <span class="stats-number" id="pdfIngestCount">0</span>
             </div>
             <div class="stats-item">
@@ -602,10 +644,16 @@
             switch (eventType) {
                 case 'NEW_FILES': return 'new-file';
                 case 'RETROACTIVE_TAG': return 'retroactive-tag';
-                case 'PDF_INGEST_SUCCESS': return 'pdf-ingest-success';
-                case 'PDF_INGEST_FAILURE': return 'pdf-ingest-failure';
-                case 'PDF_EMBEDDING_SUCCESS': return 'pdf-embedding-success';
-                case 'PDF_EMBEDDING_FAILURE': return 'pdf-embedding-failure';
+                case 'NV_INGEST_SUCCESS': return 'document-ingest-success';
+                case 'NV_INGEST_FAILURE': return 'document-ingest-failure';
+                case 'NV_INGEST_EMBEDDING_SUCCESS': return 'document-embedding-success';
+                case 'NV_INGEST_EMBEDDING_FAILURE': return 'document-embedding-failure';
+                case 'FOLDER_INGEST_SUCCESS': return 'folder-ingest-success';
+                case 'FOLDER_INGEST_FAILURE': return 'folder-ingest-failure';
+                case 'TIER0_PROMOTION': 
+                case 'TIER0_PROMOTION_BY_TAG': return 'tier0-promotion';
+                case 'TIER0_DEMOTION': 
+                case 'TIER0_DEMOTION_BY_TAG': return 'tier0-demotion';
                 case 'MILVUS_EMBEDDINGS_CONFIRMED': return 'milvus-embeddings-confirmed';
                 default: return '';
             }
@@ -615,10 +663,16 @@
             switch (eventType) {
                 case 'NEW_FILES': return 'new-file';
                 case 'RETROACTIVE_TAG': return 'retroactive-tag';
-                case 'PDF_INGEST_SUCCESS': return 'pdf-ingest-success';
-                case 'PDF_INGEST_FAILURE': return 'pdf-ingest-failure';
-                case 'PDF_EMBEDDING_SUCCESS': return 'pdf-embedding-success';
-                case 'PDF_EMBEDDING_FAILURE': return 'pdf-embedding-failure';
+                case 'NV_INGEST_SUCCESS': return 'document-ingest-success';
+                case 'NV_INGEST_FAILURE': return 'document-ingest-failure';
+                case 'NV_INGEST_EMBEDDING_SUCCESS': return 'document-embedding-success';
+                case 'NV_INGEST_EMBEDDING_FAILURE': return 'document-embedding-failure';
+                case 'FOLDER_INGEST_SUCCESS': return 'folder-ingest-success';
+                case 'FOLDER_INGEST_FAILURE': return 'folder-ingest-failure';
+                case 'TIER0_PROMOTION': 
+                case 'TIER0_PROMOTION_BY_TAG': return 'tier0-promotion';
+                case 'TIER0_DEMOTION': 
+                case 'TIER0_DEMOTION_BY_TAG': return 'tier0-demotion';
                 case 'MILVUS_EMBEDDINGS_CONFIRMED': return 'milvus-embeddings-confirmed';
                 default: return '';
             }
@@ -642,13 +696,14 @@
         function updateStats() {
             const totalEvents = events.length;
             const newFilesCount = events.filter(e => e.event_type === 'NEW_FILES').length;
-            const pdfIngestCount = events.filter(e => e.event_type.includes('PDF_INGEST')).length;
-            const pdfEmbeddingCount = events.filter(e => e.event_type.includes('PDF_EMBEDDING')).length;
+            const documentIngestCount = events.filter(e => e.event_type.includes('NV_INGEST')).length;
+            const folderIngestCount = events.filter(e => e.event_type.includes('FOLDER_INGEST')).length;
+            const tier0Count = events.filter(e => e.event_type.includes('TIER0_')).length;
             const milvusConfirmedCount = events.filter(e => e.event_type === 'MILVUS_EMBEDDINGS_CONFIRMED').length;
             
             document.getElementById('totalEvents').textContent = totalEvents;
             document.getElementById('newFilesCount').textContent = newFilesCount;
-            document.getElementById('pdfIngestCount').textContent = pdfIngestCount + pdfEmbeddingCount + milvusConfirmedCount;
+            document.getElementById('pdfIngestCount').textContent = documentIngestCount + folderIngestCount + tier0Count + milvusConfirmedCount;
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
         }
         
