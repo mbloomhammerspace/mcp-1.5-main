@@ -766,6 +766,7 @@ class FileMonitor:
                     "status": "SUCCESS",
                     "job_type": "folder_ingest",
                     "collection_name": collection_name,
+                    "mcp_server": "kubernetes mcp",
                     "ingest_time": datetime.now().isoformat()
                 }
                 with open(log_file, 'a', encoding='utf-8') as f:
@@ -1005,11 +1006,11 @@ echo "Note: ingestion is async; allow processing time."
             with open(job_file, 'w') as f:
                 yaml.dump(job, f, default_flow_style=False)
             
-            # Deploy to Kubernetes
-            logger.info(f"📦 Deploying ConfigMap: {configmap_file}")
+            # Deploy to Kubernetes via kubernetes mcp
+            logger.info(f"📦 Deploying ConfigMap via kubernetes mcp: {configmap_file}")
             subprocess.run(["kubectl", "apply", "-f", configmap_file], check=True)
             
-            logger.info(f"📦 Deploying Job: {job_file}")
+            logger.info(f"📦 Deploying Job via kubernetes mcp: {job_file}")
             subprocess.run(["kubectl", "apply", "-f", job_file], check=True)
             
             # Clean up temp files
@@ -1044,6 +1045,7 @@ echo "Note: ingestion is async; allow processing time."
                 "status": status,
                 "job_type": "nv_ingest",
                 "collection_name": collection_name,
+                "mcp_server": "kubernetes mcp",
                 "ingest_time": datetime.now().isoformat()
             }
             
@@ -1088,9 +1090,10 @@ echo "Note: ingestion is async; allow processing time."
                 "folder_path": folder_path,
                 "file_count": nv_ingest_count,
                 "status": status,
-                "job_type": "folder_ingest",
-                "collection_name": collection_name,
-                "ingest_time": datetime.now().isoformat()
+                    "job_type": "folder_ingest",
+                    "collection_name": collection_name,
+                    "mcp_server": "kubernetes mcp",
+                    "ingest_time": datetime.now().isoformat()
             }
             
             # Write JSON event to log
@@ -1217,17 +1220,17 @@ echo "Note: ingestion is async; allow processing time."
             )
             
             if status_result.returncode == 0 and "True" in status_result.stdout:
-                logger.info(f"✅ Kubernetes job {latest_job} completed successfully for {collection_name}")
+                logger.info(f"✅ Kubernetes job via kubernetes mcp {latest_job} completed successfully for {collection_name}")
                 return True
             
-            logger.debug(f"⏳ Kubernetes job {latest_job} still running for {collection_name}")
+            logger.debug(f"⏳ Kubernetes job via kubernetes mcp {latest_job} still running for {collection_name}")
             return False
             
         except subprocess.CalledProcessError as e:
-            logger.debug(f"⏳ Kubernetes job check failed (job may not exist yet): {e}")
+            logger.debug(f"⏳ Kubernetes job via kubernetes mcp check failed (job may not exist yet): {e}")
             return False
         except Exception as e:
-            logger.error(f"❌ Error checking Kubernetes job status: {e}")
+            logger.error(f"❌ Error checking Kubernetes job via kubernetes mcp status: {e}")
             return False
     
     def verify_file_in_collection(self, file_path: str, collection_name: str) -> bool:
@@ -1295,19 +1298,19 @@ echo "Note: ingestion is async; allow processing time."
             )
             
             if result.returncode == 0:
-                logger.info(f"✅ Milvus verification: {filename} found in collection {collection_name}")
+                logger.info(f"✅ Milvus verification via milvus mcp: {filename} found in collection {collection_name}")
                 return True
             else:
-                logger.debug(f"⏳ Milvus verification: {filename} not found in collection {collection_name}")
+                logger.debug(f"⏳ Milvus verification via milvus mcp: {filename} not found in collection {collection_name}")
                 if result.stderr:
                     logger.debug(f"Verification error: {result.stderr}")
                 return False
                 
         except subprocess.TimeoutExpired:
-            logger.debug(f"⏳ Milvus verification timeout for {filename}")
+            logger.debug(f"⏳ Milvus verification via milvus mcp timeout for {filename}")
             return False
         except Exception as e:
-            logger.debug(f"⏳ Cannot query Milvus collection: {e}")
+            logger.debug(f"⏳ Cannot query Milvus collection via milvus mcp: {e}")
             return False
     
     def check_ingest_service_logs(self, file_path: str, collection_name: str) -> bool:
@@ -1756,7 +1759,7 @@ echo "Note: ingestion is async; allow processing time."
                     "collection_name": collection_name,
                     "objective": "Place-on-tier0",
                     "status": "SUCCESS",
-                    "message": f"Folder demoted from tier0 after embeddings confirmed in Milvus"
+                    "message": f"Folder demoted from tier0 after embeddings confirmed in Milvus via milvus mcp"
                 }
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
@@ -1818,7 +1821,7 @@ echo "Note: ingestion is async; allow processing time."
                     "collection_name": collection_name,
                     "objective": "Place-on-tier0",
                     "status": "SUCCESS",
-                    "message": f"File demoted from tier0 after embeddings confirmed in Milvus"
+                    "message": f"File demoted from tier0 after embeddings confirmed in Milvus via milvus mcp"
                 }
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
@@ -1852,6 +1855,7 @@ echo "Note: ingestion is async; allow processing time."
                 "collection_name": collection_name,
                 "milvus_verified": milvus_verified,
                 "milvus_uri": "10.0.0.60:30195",
+                "mcp_server": "milvus mcp",
                 "completion_time": datetime.now().isoformat()
             }
             
@@ -1892,6 +1896,7 @@ echo "Note: ingestion is async; allow processing time."
                 "file_path": file_path,
                 "collection_name": collection_name,
                 "milvus_uri": "10.0.0.60:30195",
+                "mcp_server": "milvus mcp",
                 "file_metadata": {
                     "size_bytes": file_size,
                     "md5_hash": file_md5,
@@ -1906,7 +1911,7 @@ echo "Note: ingestion is async; allow processing time."
             with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
-            logger.info(f"🎯 MILVUS EMBEDDINGS CONFIRMED: {filename} → Verified in collection {collection_name}")
+            logger.info(f"🎯 MILVUS EMBEDDINGS CONFIRMED via milvus mcp: {filename} → Verified in collection {collection_name}")
                 
         except Exception as e:
             logger.error(f"❌ Failed to emit Milvus embeddings confirmed event for {file_path}: {e}")
