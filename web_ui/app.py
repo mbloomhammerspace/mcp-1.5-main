@@ -383,7 +383,7 @@ def get_monitor_status():
     try:
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-        from inotify_monitor import get_monitor_service
+        from file_monitor import get_monitor_service
         
         monitor_service = get_monitor_service()
         status = monitor_service.get_status()
@@ -596,7 +596,7 @@ if __name__ == '__main__':
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
     try:
-        from inotify_monitor import get_monitor_service
+        from file_monitor import get_monitor_service
         monitor = get_monitor_service()
         
         # Start monitor in background thread
