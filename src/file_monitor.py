@@ -660,9 +660,13 @@ class FileMonitor:
         try:
             logger.info(f"🚀 Triggering nv-ingest job for: {file_path}")
             
-            # Apply tier0 objective for high-performance access during embedding
-            if self.apply_tier0_objective_single_file(file_path):
-                logger.info(f"🎯 TIER0 PROMOTION: {file_path} → Moved to tier0 for embedding")
+            # Tag file as being embedded
+            if self.tag_file_with_embedding(file_path):
+                logger.info(f"🏷️ EMBEDDING TAG: {file_path} → Tagged for embedding")
+            
+            # Apply tier0 objective to all files with embedding tag
+            if self.apply_tier0_objective_by_tag("embedding"):
+                logger.info(f"🎯 TIER0 PROMOTION: All files with 'embedding' tag → Moved to tier0 for processing")
             
             # Get the collection name first
             collection_name = self.get_next_collection_name()
@@ -768,11 +772,13 @@ class FileMonitor:
                 
                 logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(supported_files)} files deployed to {collection_name}")
                 
-                # Tag all files in the folder with collectionid
+                # Tag all files in the folder with collectionid and embedding tag
                 self.tag_folder_files_with_collectionid(folder_path, collection_name)
+                self.tag_folder_files_with_embedding(folder_path)
                 
-                # Apply Place-on-tier0 objective for high-performance access during processing
-                self.apply_tier0_objective(folder_path, collection_name)
+                # Apply tier0 objective to all files with embedding tag
+                if self.apply_tier0_objective_by_tag("embedding"):
+                    logger.info(f"🎯 TIER0 PROMOTION: All files with 'embedding' tag → Moved to tier0 for processing")
                 
                 # Schedule job completion check
                 try:
@@ -1155,15 +1161,13 @@ echo "Note: ingestion is async; allow processing time."
                 # Emit specific Milvus confirmation event
                 self.emit_milvus_embeddings_confirmed(file_path, collection_name)
                 
-                # Remove Place-on-tier0 objective after embeddings are confirmed in Milvus
-                if os.path.isdir(file_path):
-                    # For folders, check if we've already demoted this folder to prevent duplicates
-                    if file_path not in self.tier0_demoted_folders:
-                        self.remove_tier0_objective(file_path, collection_name)
-                        self.tier0_demoted_folders.add(file_path)
-                else:
-                    # For individual files, remove tier0 objective
-                    self.remove_tier0_objective_single_file(file_path, collection_name)
+                # Remove Place-on-tier0 objective from all files with embedding tag after embeddings are confirmed
+                # Use a simple flag to prevent duplicate demotion operations
+                if not hasattr(self, 'tier0_demotion_in_progress'):
+                    self.tier0_demotion_in_progress = True
+                    if self.remove_tier0_objective_by_tag("embedding"):
+                        logger.info(f"🎯 TIER0 DEMOTION: All files with 'embedding' tag → Demoted from tier0 after embeddings confirmed")
+                    self.tier0_demotion_in_progress = False
                 
                 return True
             
@@ -1406,6 +1410,201 @@ echo "Note: ingestion is async; allow processing time."
                 
         except Exception as e:
             logger.error(f"❌ Error applying alpha site placement to {file_path}: {e}")
+            return False
+
+    def tag_file_with_embedding(self, file_path: str) -> bool:
+        """Tag a file as being embedded."""
+        try:
+            cmd = [self.hs_cli, "tag", "set", "embedding", file_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(file_path))
+            
+            if result.returncode == 0:
+                logger.info(f"✅ EMBEDDING TAG: {file_path} → Tagged for embedding")
+                return True
+            else:
+                logger.error(f"❌ Failed to tag {file_path} with embedding: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error tagging {file_path} with embedding: {e}")
+            return False
+
+    def tag_folder_files_with_embedding(self, folder_path: str) -> int:
+        """Tag all supported files in a folder with embedding tag. Returns number of files tagged."""
+        try:
+            logger.info(f"🏷️ Tagging supported files in {folder_path} with embedding tag")
+
+            tagged_count = 0
+            supported_extensions = {
+                '.bmp', '.docx', '.html', '.jpeg', '.jpg', '.json', '.md',
+                '.pdf', '.png', '.pptx', '.sh', '.tiff', '.tif', '.txt', '.mp3'
+            }
+
+            # Walk through all files in the folder
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+
+                    # Skip hidden files
+                    if file.startswith('.'):
+                        continue
+
+                    # Only tag supported file types
+                    file_ext = os.path.splitext(file)[1].lower()
+                    if file_ext in supported_extensions:
+                        if self.tag_file_with_embedding(file_path):
+                            tagged_count += 1
+                    else:
+                        logger.debug(f"📄 Skipping unsupported file type for embedding tag: {file_path} (extension: {file_ext})")
+
+            logger.info(f"✅ EMBEDDING TAGGING: {folder_path} → {tagged_count} supported files tagged with embedding")
+            return tagged_count
+
+        except Exception as e:
+            logger.error(f"❌ Error tagging folder files with embedding: {e}")
+            return 0
+
+    def find_files_by_tag(self, tag_name: str, search_path: str = "/mnt/anvil/hub") -> list:
+        """Find all files with a specific tag in the search path."""
+        try:
+            # Use hs tag list to find files with the specific tag
+            cmd = ["/home/ubuntu/.local/bin/hs", "tag", "list", "-r", search_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode != 0:
+                logger.error(f"❌ Failed to list tags: {result.stderr}")
+                return []
+            
+            # Parse the output to find files with the specific tag
+            tagged_files = []
+            current_file = None
+            
+            for line in result.stdout.split('\n'):
+                line = line.strip()
+                
+                # Check if this line contains a file path (no indentation)
+                if line and not line.startswith(' ') and not line.startswith('|') and not line.startswith('TAGS_TABLE'):
+                    # This is a file path
+                    if ':' in line:
+                        current_file = line.split(':')[0].strip()
+                    else:
+                        current_file = line
+                
+                # Check if this line contains our target tag
+                elif current_file and f'NAME = "{tag_name}"' in line:
+                    if os.path.exists(current_file) and os.path.isfile(current_file):
+                        tagged_files.append(current_file)
+                        logger.debug(f"🔍 Found file with tag '{tag_name}': {current_file}")
+            
+            logger.info(f"🔍 Found {len(tagged_files)} files with tag '{tag_name}'")
+            return tagged_files
+            
+        except Exception as e:
+            logger.error(f"❌ Error finding files by tag '{tag_name}': {e}")
+            return []
+
+    def apply_tier0_objective_by_tag(self, tag_name: str) -> bool:
+        """Apply Place-on-tier0 objective to all files with a specific tag."""
+        try:
+            logger.info(f"🎯 TIER0 PROMOTION: Applying Place-on-tier0 objective to all files with tag '{tag_name}'")
+            
+            # Add a small delay for NFS timing issues
+            import time
+            time.sleep(2)
+            
+            # Find all files with the embedding tag
+            tagged_files = self.find_files_by_tag(tag_name)
+            
+            if not tagged_files:
+                logger.info(f"ℹ️ No files found with tag '{tag_name}' for tier0 promotion")
+                return True
+            
+            success_count = 0
+            for file_path in tagged_files:
+                # Apply tier0 objective to each file individually
+                obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "add", "Place-on-tier0", file_path]
+                result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    success_count += 1
+                    logger.debug(f"✅ TIER0 PROMOTION: {file_path} → Place-on-tier0 objective applied")
+                else:
+                    logger.error(f"❌ TIER0 PROMOTION FAILED: {file_path} → {result.stderr}")
+            
+            if success_count > 0:
+                logger.info(f"✅ TIER0 PROMOTION SUCCESS: {success_count}/{len(tagged_files)} files with tag '{tag_name}' → Place-on-tier0 objective applied")
+                
+                # Log to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_PROMOTION_BY_TAG",
+                    "tag_name": tag_name,
+                    "objective": "Place-on-tier0",
+                    "status": "SUCCESS",
+                    "files_processed": success_count,
+                    "total_files": len(tagged_files),
+                    "message": f"{success_count} files with tag '{tag_name}' promoted to tier0 for processing"
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return True
+            else:
+                logger.error(f"❌ TIER0 PROMOTION FAILED: No files with tag '{tag_name}' could be promoted")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error applying tier0 objective by tag '{tag_name}': {e}")
+            return False
+
+    def remove_tier0_objective_by_tag(self, tag_name: str) -> bool:
+        """Remove Place-on-tier0 objective from all files with a specific tag."""
+        try:
+            logger.info(f"🎯 TIER0 DEMOTION: Removing Place-on-tier0 objective from all files with tag '{tag_name}'")
+            
+            # Find all files with the embedding tag
+            tagged_files = self.find_files_by_tag(tag_name)
+            
+            if not tagged_files:
+                logger.info(f"ℹ️ No files found with tag '{tag_name}' for tier0 demotion")
+                return True
+            
+            success_count = 0
+            for file_path in tagged_files:
+                # Remove tier0 objective from each file individually
+                obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "delete", "Place-on-tier0", file_path]
+                result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    success_count += 1
+                    logger.debug(f"✅ TIER0 DEMOTION: {file_path} → Place-on-tier0 objective removed")
+                else:
+                    logger.error(f"❌ TIER0 DEMOTION FAILED: {file_path} → {result.stderr}")
+            
+            if success_count > 0:
+                logger.info(f"✅ TIER0 DEMOTION SUCCESS: {success_count}/{len(tagged_files)} files with tag '{tag_name}' → Place-on-tier0 objective removed")
+                
+                # Log to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_DEMOTION_BY_TAG",
+                    "tag_name": tag_name,
+                    "objective": "Place-on-tier0",
+                    "status": "SUCCESS",
+                    "files_processed": success_count,
+                    "total_files": len(tagged_files),
+                    "message": f"{success_count} files with tag '{tag_name}' demoted from tier0 after embeddings confirmed"
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return True
+            else:
+                logger.error(f"❌ TIER0 DEMOTION FAILED: No files with tag '{tag_name}' could be demoted")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error removing tier0 objective by tag '{tag_name}': {e}")
             return False
 
     def apply_tier0_objective_single_file(self, file_path: str) -> bool:
