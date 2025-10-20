@@ -605,11 +605,28 @@ class FileMonitor:
     
     def should_trigger_nv_ingest(self, file_path: str, mime_type: str) -> bool:
         """Check if a file should trigger an nv-ingest job."""
-        # Check if it's a supported file type (any DOCX, PDF, PPTX, CSV, or TXT file)
-        supported_extensions = {'.pdf', '.docx', '.pptx', '.csv', '.txt'}
+        # Check if it's a supported file type (only processable formats)
+        supported_extensions = {
+            '.bmp',      # Bitmap images
+            '.docx',     # Word documents
+            '.html',     # HTML files (converted to markdown)
+            '.jpeg',     # JPEG images
+            '.jpg',      # JPEG images (alternative extension)
+            '.json',     # JSON files (treated as text)
+            '.md',       # Markdown files (treated as text)
+            '.pdf',      # PDF documents
+            '.png',      # PNG images
+            '.pptx',     # PowerPoint presentations
+            '.sh',       # Shell scripts (treated as text)
+            '.tiff',     # TIFF images
+            '.tif',      # TIFF images (alternative extension)
+            '.txt',      # Text files
+            '.mp3'       # Audio files (via document_type override)
+        }
         file_ext = os.path.splitext(file_path)[1].lower()
         
         if file_ext not in supported_extensions:
+            logger.debug(f"📄 Ignoring unsupported file type: {file_path} (extension: {file_ext})")
             return False
         
         # Check if it's in the hub directory
@@ -662,13 +679,16 @@ class FileMonitor:
             # Quick check: look for any supported file types in the top level first
             try:
                 top_level_files = os.listdir(folder_path)
-                supported_extensions = {'.pdf', '.docx', '.pptx', '.csv', '.txt'}
+                supported_extensions = {
+                    '.bmp', '.docx', '.html', '.jpeg', '.jpg', '.json', '.md', 
+                    '.pdf', '.png', '.pptx', '.sh', '.tiff', '.tif', '.txt', '.mp3'
+                }
                 has_supported_files = any(os.path.splitext(f)[1].lower() in supported_extensions for f in top_level_files if os.path.isfile(os.path.join(folder_path, f)))
                 if not has_supported_files:
                     # Check if any subdirectories might contain supported files
                     has_subdirs = any(os.path.isdir(os.path.join(folder_path, d)) for d in top_level_files)
                     if not has_subdirs:
-                        logger.info(f"📁 No supported file types (.pdf, .docx, .pptx, .csv, .txt) found in: {folder_path}")
+                        logger.info(f"📁 No supported file types found in: {folder_path} - ignoring folder")
                         return False, ""
             except Exception as e:
                 logger.warning(f"📁 Could not perform quick check on {folder_path}: {e}")
@@ -677,7 +697,10 @@ class FileMonitor:
             supported_files = []
             max_retries = 5
             retry_delay = 5  # seconds
-            supported_extensions = {'.pdf', '.docx', '.pptx', '.csv', '.txt'}
+            supported_extensions = {
+                '.bmp', '.docx', '.html', '.jpeg', '.jpg', '.json', '.md', 
+                '.pdf', '.png', '.pptx', '.sh', '.tiff', '.tif', '.txt', '.mp3'
+            }
             
             for attempt in range(max_retries):
                 supported_files = []
@@ -1306,11 +1329,15 @@ echo "Note: ingestion is async; allow processing time."
             return False
     
     def tag_folder_files_with_collectionid(self, folder_path: str, collection_name: str) -> int:
-        """Tag all files in a folder with collectionid tag. Returns number of files tagged."""
+        """Tag all supported files in a folder with collectionid tag. Returns number of files tagged."""
         try:
-            logger.info(f"🏷️ Tagging all files in {folder_path} with collectionid={collection_name}")
+            logger.info(f"🏷️ Tagging supported files in {folder_path} with collectionid={collection_name}")
             
             tagged_count = 0
+            supported_extensions = {
+                '.bmp', '.docx', '.html', '.jpeg', '.jpg', '.json', '.md', 
+                '.pdf', '.png', '.pptx', '.sh', '.tiff', '.tif', '.txt', '.mp3'
+            }
             
             # Walk through all files in the folder
             for root, dirs, files in os.walk(folder_path):
@@ -1321,11 +1348,15 @@ echo "Note: ingestion is async; allow processing time."
                     if file.startswith('.'):
                         continue
                     
-                    # Tag the file with collectionid
-                    if self.tag_file_with_collectionid(file_path, collection_name):
-                        tagged_count += 1
+                    # Only tag supported file types
+                    file_ext = os.path.splitext(file)[1].lower()
+                    if file_ext in supported_extensions:
+                        if self.tag_file_with_collectionid(file_path, collection_name):
+                            tagged_count += 1
+                    else:
+                        logger.debug(f"📄 Skipping unsupported file type for tagging: {file_path} (extension: {file_ext})")
             
-            logger.info(f"✅ COLLECTIONID TAGGING: {folder_path} → {tagged_count} files tagged with collectionid={collection_name}")
+            logger.info(f"✅ COLLECTIONID TAGGING: {folder_path} → {tagged_count} supported files tagged with collectionid={collection_name}")
             return tagged_count
             
         except Exception as e:
