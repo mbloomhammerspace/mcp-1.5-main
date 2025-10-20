@@ -777,7 +777,7 @@ class FileMonitor:
                 import time
                 start_time = time.time()
                 
-                self.tag_folder_files_with_collectionid(folder_path, collection_name)
+                self.tag_folder_with_collectionid(folder_path, collection_name)
                 self.tag_folder_with_embedding(folder_path)
                 
                 tagging_time = time.time() - start_time
@@ -1354,40 +1354,25 @@ echo "Note: ingestion is async; allow processing time."
             logger.error(f"❌ Error tagging {file_path} with state={state}: {e}")
             return False
     
-    def tag_folder_files_with_collectionid(self, folder_path: str, collection_name: str) -> int:
-        """Tag all supported files in a folder with collectionid tag. Returns number of files tagged."""
+    def tag_folder_with_collectionid(self, folder_path: str, collection_name: str) -> bool:
+        """Tag the entire folder recursively with collectionid tag. Much faster than individual file tagging."""
         try:
-            logger.info(f"🏷️ Tagging supported files in {folder_path} with collectionid={collection_name}")
+            logger.info(f"🏷️ Tagging folder recursively with collectionid={collection_name}: {folder_path}")
             
-            tagged_count = 0
-            supported_extensions = {
-                '.bmp', '.docx', '.html', '.jpeg', '.jpg', '.json', '.md', 
-                '.pdf', '.png', '.pptx', '.sh', '.tiff', '.tif', '.txt', '.mp3'
-            }
+            # Use recursive tagging to tag the entire folder hierarchy at once
+            cmd = [self.hs_cli, "tag", "set", f"collectionid={collection_name}", "-r", folder_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(folder_path))
             
-            # Walk through all files in the folder
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    
-                    # Skip hidden files
-                    if file.startswith('.'):
-                        continue
-                    
-                    # Only tag supported file types
-                    file_ext = os.path.splitext(file)[1].lower()
-                    if file_ext in supported_extensions:
-                        if self.tag_file_with_collectionid(file_path, collection_name):
-                            tagged_count += 1
-                    else:
-                        logger.debug(f"📄 Skipping unsupported file type for tagging: {file_path} (extension: {file_ext})")
-            
-            logger.info(f"✅ COLLECTIONID TAGGING: {folder_path} → {tagged_count} supported files tagged with collectionid={collection_name}")
-            return tagged_count
-            
+            if result.returncode == 0:
+                logger.info(f"✅ FOLDER COLLECTIONID TAG: {folder_path} → Entire folder tagged recursively with collectionid={collection_name}")
+                return True
+            else:
+                logger.error(f"❌ Failed to tag folder {folder_path} with collectionid={collection_name}: {result.stderr}")
+                return False
+                
         except Exception as e:
-            logger.error(f"❌ Error tagging folder files with collectionid: {e}")
-            return 0
+            logger.error(f"❌ Error tagging folder with collectionid: {e}")
+            return False
     
     def tag_file_with_collectionid(self, file_path: str, collection_name: str) -> bool:
         """Tag a file with collectionid."""
