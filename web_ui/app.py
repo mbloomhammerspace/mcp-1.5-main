@@ -59,23 +59,113 @@ from mcp_control_center import mcp_control_center
 conversation_history = []
 
 def get_mcp_tools():
-    """Get list of available MCP tools"""
-    return get_available_tools()
+    """Get list of available MCP tools from all MCP servers"""
+    # Get Hammerspace MCP tools
+    hammerspace_tools = get_available_tools()
+    
+    # Get Milvus MCP tools
+    milvus_tools = []
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        milvus_tools = loop.run_until_complete(mcp_control_center.discover_tools("milvus"))
+        loop.close()
+        
+        # Convert MCPTool objects to dict format
+        milvus_tools_dict = []
+        for tool in milvus_tools:
+            milvus_tools_dict.append({
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.input_schema
+            })
+        milvus_tools = milvus_tools_dict
+    except Exception as e:
+        logger.warning(f"Could not discover Milvus tools: {e}")
+    
+    # Get Kubernetes MCP tools
+    k8s_tools = []
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        k8s_tools = loop.run_until_complete(mcp_control_center.discover_tools("kubernetes"))
+        loop.close()
+        
+        # Convert MCPTool objects to dict format
+        k8s_tools_dict = []
+        for tool in k8s_tools:
+            k8s_tools_dict.append({
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.input_schema
+            })
+        k8s_tools = k8s_tools_dict
+    except Exception as e:
+        logger.warning(f"Could not discover Kubernetes tools: {e}")
+    
+    # Combine all tools
+    all_tools = hammerspace_tools + milvus_tools + k8s_tools
+    logger.info(f"Total tools discovered: {len(all_tools)} (Hammerspace: {len(hammerspace_tools)}, Milvus: {len(milvus_tools)}, K8s: {len(k8s_tools)})")
+    return all_tools
 
 def call_mcp_tool(tool_name: str, arguments: dict):
     """Call an MCP tool and return the result"""
-    result = call_mcp_tool_via_cli(tool_name, arguments)
-    
-    # Convert result to string format
-    if isinstance(result, dict):
-        if result.get("error"):
-            return f"Error: {result['error']}"
-        elif result.get("success"):
-            return f"Success: {result.get('message', 'Operation completed successfully')}"
+    # First try Hammerspace MCP (existing functionality)
+    try:
+        result = call_mcp_tool_via_cli(tool_name, arguments)
+        
+        # Convert result to string format
+        if isinstance(result, dict):
+            if result.get("error"):
+                return f"Error: {result['error']}"
+            elif result.get("success"):
+                return f"Success: {result.get('message', 'Operation completed successfully')}"
+            else:
+                return json.dumps(result, indent=2)
         else:
-            return json.dumps(result, indent=2)
-    else:
-        return str(result)
+            return str(result)
+    except Exception as e:
+        # If Hammerspace MCP fails, try other MCP servers
+        logger.warning(f"Hammerspace MCP tool {tool_name} failed: {e}")
+        
+        # Try Milvus MCP
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(mcp_control_center.call_tool("milvus", tool_name, arguments))
+            loop.close()
+            
+            if isinstance(result, dict):
+                if result.get("error"):
+                    return f"Milvus Error: {result['error']}"
+                else:
+                    return json.dumps(result, indent=2)
+            else:
+                return str(result)
+        except Exception as e2:
+            logger.warning(f"Milvus MCP tool {tool_name} failed: {e2}")
+            
+            # Try Kubernetes MCP
+            try:
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(mcp_control_center.call_tool("kubernetes", tool_name, arguments))
+                loop.close()
+                
+                if isinstance(result, dict):
+                    if result.get("error"):
+                        return f"Kubernetes Error: {result['error']}"
+                    else:
+                        return json.dumps(result, indent=2)
+                else:
+                    return str(result)
+            except Exception as e3:
+                logger.error(f"All MCP servers failed for tool {tool_name}: {e3}")
+                return f"Error: Tool {tool_name} not found in any MCP server"
 
 def convert_mcp_tools_to_anthropic_format(mcp_tools):
     """Convert MCP tool definitions to Anthropic tool format"""
@@ -184,7 +274,7 @@ def chat():
             return jsonify({'error': 'LLM API client not initialized. Check configuration.'}), 500
         
         # Call Claude with tool use and system prompt for action-oriented responses
-        system_prompt = """You are a Hammerspace storage management assistant with direct access to MCP tools.
+        system_prompt = """You are a comprehensive MCP management assistant with access to Hammerspace, Milvus, and Kubernetes MCP tools.
 
 CRITICAL INSTRUCTIONS:
 - EXECUTE what the user asks - don't suggest alternatives or workarounds
@@ -193,6 +283,23 @@ CRITICAL INSTRUCTIONS:
 - If files are misaligned, list them specifically
 - NO fallback suggestions - just execute and report facts
 - Be direct: "✓ Done" or "✗ Failed: [specific error]"
+
+MCP SERVER CAPABILITIES:
+- HAMMERSPACE MCP: File tagging, tier management, objectives, alignment checks
+- MILVUS MCP: Vector database operations, collections, embeddings, search
+- KUBERNETES MCP: Cluster management, job deployment, pod monitoring, resource management
+
+For Milvus operations, you can ask about:
+- "List all collections in Milvus"
+- "Show Milvus database status"
+- "Check Milvus server health"
+- "Get collection statistics"
+
+For Kubernetes operations, you can ask about:
+- "Show Kubernetes cluster status"
+- "List running pods"
+- "Check job status"
+- "Get cluster resources"
 
 KEY TOOLS FOR COMMON OPERATIONS:
 - To tag files: use tag_directory_recursive with the full directory path
@@ -712,6 +819,27 @@ def api_mcp_stop_server(server_id):
         })
     except Exception as e:
         logger.error(f"Error stopping server {server_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/mcp/call/<server_id>/<tool_name>')
+def api_mcp_call_tool(server_id, tool_name):
+    """API endpoint to call a tool on an MCP server"""
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(mcp_control_center.call_tool(server_id, tool_name, {}))
+        loop.close()
+        
+        return jsonify({
+            "success": True,
+            "result": result
+        })
+    except Exception as e:
+        logger.error(f"Error calling tool {tool_name} on {server_id}: {e}")
         return jsonify({
             "success": False,
             "error": str(e)

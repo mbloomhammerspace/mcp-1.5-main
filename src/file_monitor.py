@@ -323,17 +323,17 @@ class FileMonitor:
                     mime_type = self.detect_mimetype(file_path)
                     tagged = self.tag_file(file_path, md5_hash, mime_type, is_retroactive=False)
                 
-                # Check if this is a PDF file in hub that needs ingest job
-                if tagged and self.should_trigger_pdf_ingest(file_path, mime_type):
-                    job_success, collection_name = self.trigger_pdf_ingest_job(file_path)
-                    # Emit event for PDF ingest job creation
-                    self.emit_pdf_ingest_event(file_path, job_success, collection_name)
-                
-                # Check if this is a new folder in hub that needs folder ingest job
-                elif tagged and os.path.isdir(file_path) and '/mnt/anvil/hub' in file_path:
+                # Check if this is a new folder in hub that needs folder ingest job (prioritize folders)
+                if tagged and os.path.isdir(file_path) and '/mnt/anvil/hub' in file_path:
                     job_success, collection_name = self.trigger_folder_ingest_job(file_path)
                     # Emit event for folder ingest job creation
                     self.emit_folder_ingest_event(file_path, job_success, collection_name)
+                
+                # Check if this is an nv-ingest file in hub that needs ingest job
+                elif tagged and self.should_trigger_nv_ingest(file_path, mime_type):
+                    job_success, collection_name = self.trigger_nv_ingest_job(file_path)
+                    # Emit event for nv-ingest job creation
+                    self.emit_nv_ingest_event(file_path, job_success, collection_name)
                 
                 # Only emit detailed event data to log file for successfully tagged files
                 if tagged:
@@ -603,10 +603,11 @@ class FileMonitor:
         if len(self.event_queue) > 0:
             self.process_event_batch()
     
-    def should_trigger_pdf_ingest(self, file_path: str, mime_type: str) -> bool:
-        """Check if a file should trigger a PDF ingest job."""
-        # Check if it's a PDF file
-        if mime_type != 'application/pdf' and not file_path.lower().endswith('.pdf'):
+    def should_trigger_nv_ingest(self, file_path: str, mime_type: str) -> bool:
+        """Check if a file should trigger an nv-ingest job."""
+        # Check if it's an nv-ingest file (starts with "nv-ingest")
+        filename = os.path.basename(file_path)
+        if not filename.startswith('nv-ingest'):
             return False
         
         # Check if it's in the hub directory
@@ -621,54 +622,54 @@ class FileMonitor:
             age_hours = (current_time - atime) / 3600
             
             if age_hours > 12:
-                logger.info(f"📄 PDF file {file_path} is {age_hours:.1f} hours old, skipping ingest")
+                logger.info(f"📄 nv-ingest file {file_path} is {age_hours:.1f} hours old, skipping ingest")
                 return False
                 
-            logger.info(f"📄 PDF file {file_path} is {age_hours:.1f} hours old, will trigger ingest")
+            logger.info(f"📄 nv-ingest file {file_path} is {age_hours:.1f} hours old, will trigger ingest")
             return True
             
         except Exception as e:
             logger.error(f"❌ Error checking file age for {file_path}: {e}")
             return False
     
-    def trigger_pdf_ingest_job(self, file_path: str) -> tuple[bool, str]:
-        """Trigger a PDF ingest job for a single file. Returns (success, collection_name)."""
+    def trigger_nv_ingest_job(self, file_path: str) -> tuple[bool, str]:
+        """Trigger an nv-ingest job for a single file. Returns (success, collection_name)."""
         try:
-            logger.info(f"🚀 Triggering PDF ingest job for: {file_path}")
+            logger.info(f"🚀 Triggering nv-ingest job for: {file_path}")
             
             # Get the collection name first
             collection_name = self.get_next_collection_name()
             
             # Create a job name with timestamp
             timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            job_name = f"pdf-ingest-{timestamp}"
+            job_name = f"nv-ingest-{timestamp}"
             
             # Create the ingest job YAML
-            success = self.create_pdf_ingest_job([file_path], job_name, collection_name)
+            success = self.create_nv_ingest_job([file_path], job_name, collection_name)
             return success, collection_name
             
         except Exception as e:
-            logger.error(f"❌ Failed to trigger PDF ingest job for {file_path}: {e}")
+            logger.error(f"❌ Failed to trigger nv-ingest job for {file_path}: {e}")
             return False, "unknown"
 
     def trigger_folder_ingest_job(self, folder_path: str) -> tuple[bool, str]:
-        """Trigger a PDF ingest job for all files in a folder. Returns (success, collection_name)."""
+        """Trigger an nv-ingest job for all nv-ingest files in a folder. Returns (success, collection_name)."""
         try:
             logger.info(f"🚀 Triggering folder ingest job for: {folder_path}")
             
-            # Get all PDF files in the folder
-            pdf_files = []
+            # Get all nv-ingest files in the folder
+            nv_ingest_files = []
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
-                    if file.lower().endswith('.pdf'):
+                    if file.startswith('nv-ingest'):
                         file_path = os.path.join(root, file)
-                        pdf_files.append(file_path)
+                        nv_ingest_files.append(file_path)
             
-            if not pdf_files:
-                logger.info(f"📁 No PDF files found in folder: {folder_path}")
+            if not nv_ingest_files:
+                logger.info(f"📁 No nv-ingest files found in folder: {folder_path}")
                 return False, ""
             
-            logger.info(f"📁 Found {len(pdf_files)} PDF files in folder: {folder_path}")
+            logger.info(f"📁 Found {len(nv_ingest_files)} nv-ingest files in folder: {folder_path}")
             
             # Use folder name for collection (sanitized)
             folder_name = os.path.basename(folder_path)
@@ -679,7 +680,7 @@ class FileMonitor:
             
             # Create and deploy the job
             job_name = f"folder-ingest-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            success = self.create_pdf_ingest_job(pdf_files, job_name, collection_name)
+            success = self.create_nv_ingest_job(nv_ingest_files, job_name, collection_name)
             
             if success:
                 # Log success event
@@ -688,7 +689,7 @@ class FileMonitor:
                     "event_type": "FOLDER_INGEST_SUCCESS",
                     "folder_name": folder_name,
                     "folder_path": folder_path,
-                    "file_count": len(pdf_files),
+                    "file_count": len(nv_ingest_files),
                     "status": "SUCCESS",
                     "job_type": "folder_ingest",
                     "collection_name": collection_name,
@@ -697,7 +698,7 @@ class FileMonitor:
                 with open(log_file, 'a') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
-                logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(pdf_files)} files deployed to {collection_name}")
+                logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(nv_ingest_files)} files deployed to {collection_name}")
                 
                 # Tag all files in the folder with collectionid
                 self.tag_folder_files_with_collectionid(folder_path, collection_name)
@@ -719,7 +720,7 @@ class FileMonitor:
                     "event_type": "FOLDER_INGEST_FAILURE",
                     "folder_name": folder_name,
                     "folder_path": folder_path,
-                    "file_count": len(pdf_files),
+                    "file_count": len(nv_ingest_files),
                     "status": "FAILURE",
                     "job_type": "folder_ingest",
                     "error": "Failed to create or deploy job",
@@ -772,8 +773,8 @@ class FileMonitor:
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             return f"intel-{timestamp}"
 
-    def create_pdf_ingest_job(self, pdf_files: List[str], job_name: str, collection_name: str = None) -> bool:
-        """Create and deploy a Kubernetes job to ingest PDF files. Returns True if successful."""
+    def create_nv_ingest_job(self, nv_ingest_files: List[str], job_name: str, collection_name: str = None) -> bool:
+        """Create and deploy a Kubernetes job to ingest nv-ingest files. Returns True if successful."""
         try:
             # Use provided collection name or get the next one
             if not collection_name:
@@ -781,7 +782,7 @@ class FileMonitor:
             
             # Create file list content with relative paths (volume is mounted at /data)
             relative_files = []
-            for f in pdf_files:
+            for f in nv_ingest_files:
                 # Convert absolute path to relative path for container
                 if f.startswith('/mnt/anvil/hub/'):
                     relative_path = f.replace('/mnt/anvil/hub/', '/data/')
@@ -824,7 +825,7 @@ class FileMonitor:
 set -euo pipefail
 apk add --no-cache curl coreutils
 API="http://ingestor-server:8082"
-COLLECTION_NAME="${COLLECTION_NAME:-bulk_selected_pdfs}"
+COLLECTION_NAME="${COLLECTION_NAME:-bulk_selected_nv_ingest}"
 LIST="/work/files.txt"
 
 echo "Creating collection: ${COLLECTION_NAME}"
@@ -860,7 +861,7 @@ echo "Note: ingestion is async; allow processing time."
                                          }],
                                 "volumeMounts": [
                                     {
-                                        "name": "pdfs",
+                                        "name": "nv-ingest-files",
                                         "mountPath": "/data"
                                     },
                                     {
@@ -871,7 +872,7 @@ echo "Note: ingestion is async; allow processing time."
                             }],
                             "volumes": [
                                 {
-                                    "name": "pdfs",
+                                    "name": "nv-ingest-files",
                                          "persistentVolumeClaim": {
                                              "claimName": "hammerspace-hub-pvc"
                                          }
@@ -913,25 +914,25 @@ echo "Note: ingestion is async; allow processing time."
             os.unlink(configmap_file)
             os.unlink(job_file)
             
-            logger.info(f"✅ Successfully deployed PDF ingest job '{job_name}' for {len(pdf_files)} files")
+            logger.info(f"✅ Successfully deployed nv-ingest job '{job_name}' for {len(nv_ingest_files)} files")
             return True
             
         except subprocess.CalledProcessError as e:
-            logger.error(f"❌ Failed to deploy PDF ingest job: {e}")
+            logger.error(f"❌ Failed to deploy nv-ingest job: {e}")
             return False
         except Exception as e:
-            logger.error(f"❌ Error creating PDF ingest job: {e}")
+            logger.error(f"❌ Error creating nv-ingest job: {e}")
             return False
 
-    def emit_pdf_ingest_event(self, file_path: str, success: bool, collection_name: str = None):
-        """Emit a PDF ingest event to the log file."""
+    def emit_nv_ingest_event(self, file_path: str, success: bool, collection_name: str = None):
+        """Emit an nv-ingest event to the log file."""
         try:
-            event_type = "PDF_INGEST_SUCCESS" if success else "PDF_INGEST_FAILURE"
+            event_type = "NV_INGEST_SUCCESS" if success else "NV_INGEST_FAILURE"
             status = "SUCCESS" if success else "FAILURE"
             
             # Use provided collection name or fallback
             if not collection_name:
-                collection_name = "bulk_selected_pdfs"
+                collection_name = "bulk_selected_nv_ingest"
             
             event_data = {
                 "timestamp": datetime.now().isoformat(),
@@ -939,7 +940,7 @@ echo "Note: ingestion is async; allow processing time."
                 "file_name": os.path.basename(file_path),
                 "file_path": file_path,
                 "status": status,
-                "job_type": "pdf_ingest",
+                "job_type": "nv_ingest",
                 "collection_name": collection_name,
                 "ingest_time": datetime.now().isoformat()
             }
@@ -949,14 +950,14 @@ echo "Note: ingestion is async; allow processing time."
                 f.write(json.dumps(event_data) + '\n')
             
             if success:
-                logger.info(f"📄 PDF INGEST SUCCESS: {file_path} → Job created and deployed to {collection_name}")
+                logger.info(f"📄 NV-INGEST SUCCESS: {file_path} → Job created and deployed to {collection_name}")
                 # Schedule job completion check
                 self.schedule_job_completion_check(file_path, collection_name)
             else:
-                logger.error(f"📄 PDF INGEST FAILURE: {file_path} → Job creation/deployment failed")
+                logger.error(f"📄 NV-INGEST FAILURE: {file_path} → Job creation/deployment failed")
                 
         except Exception as e:
-            logger.error(f"❌ Failed to emit PDF ingest event for {file_path}: {e}")
+            logger.error(f"❌ Failed to emit nv-ingest event for {file_path}: {e}")
 
     def emit_folder_ingest_event(self, folder_path: str, success: bool, collection_name: str = None):
         """Emit a folder ingest event to the log file."""
@@ -968,22 +969,22 @@ echo "Note: ingestion is async; allow processing time."
             if not collection_name:
                 collection_name = "folder_collection"
             
-            # Count PDF files in folder
-            pdf_count = 0
+            # Count nv-ingest files in folder
+            nv_ingest_count = 0
             try:
                 for root, dirs, files in os.walk(folder_path):
                     for file in files:
-                        if file.lower().endswith('.pdf'):
-                            pdf_count += 1
+                        if file.startswith('nv-ingest'):
+                            nv_ingest_count += 1
             except:
-                pdf_count = 0
+                nv_ingest_count = 0
             
             event_data = {
                 "timestamp": datetime.now().isoformat(),
                 "event_type": event_type,
                 "folder_name": os.path.basename(folder_path),
                 "folder_path": folder_path,
-                "file_count": pdf_count,
+                "file_count": nv_ingest_count,
                 "status": status,
                 "job_type": "folder_ingest",
                 "collection_name": collection_name,
@@ -995,7 +996,7 @@ echo "Note: ingestion is async; allow processing time."
                 f.write(json.dumps(event_data) + '\n')
             
             if success:
-                logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {pdf_count} files deployed to {collection_name}")
+                logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {nv_ingest_count} files deployed to {collection_name}")
                 # Schedule job completion check
                 self.schedule_job_completion_check(folder_path, collection_name)
             else:
@@ -1033,18 +1034,18 @@ echo "Note: ingestion is async; allow processing time."
                 
                 # Check if job completed successfully
                 if self.check_and_tag_embedded_file(file_path, collection_name):
-                    logger.info(f"✅ PDF EMBEDDING COMPLETE: {file_path} → Successfully tagged as embedded in {collection_name}")
+                    logger.info(f"✅ NV-INGEST EMBEDDING COMPLETE: {file_path} → Successfully tagged as embedded in {collection_name}")
                     return
                 
-                logger.debug(f"⏳ PDF EMBEDDING CHECK {attempt + 1}/{max_checks}: {file_path} → Job still running")
+                logger.debug(f"⏳ NV-INGEST EMBEDDING CHECK {attempt + 1}/{max_checks}: {file_path} → Job still running")
             
-            logger.warning(f"⏰ PDF EMBEDDING TIMEOUT: {file_path} → Job completion check timed out")
+            logger.warning(f"⏰ NV-INGEST EMBEDDING TIMEOUT: {file_path} → Job completion check timed out")
             
         except Exception as e:
             logger.error(f"❌ Failed to check job completion for {file_path}: {e}")
     
     def check_and_tag_embedded_file(self, file_path: str, collection_name: str) -> bool:
-        """Check if the PDF has been successfully embedded and tag it."""
+        """Check if the nv-ingest file has been successfully embedded and tag it."""
         try:
             # Check if file still exists and is accessible
             if not os.path.exists(file_path):
@@ -1420,14 +1421,14 @@ echo "Note: ingestion is async; allow processing time."
             return False
     
     def emit_embedding_completion_event(self, file_path: str, success: bool, collection_name: str = None, milvus_verified: bool = False):
-        """Emit an event when PDF embedding is completed."""
+        """Emit an event when nv-ingest embedding is completed."""
         try:
-            event_type = "PDF_EMBEDDING_SUCCESS" if success else "PDF_EMBEDDING_FAILURE"
+            event_type = "NV_INGEST_EMBEDDING_SUCCESS" if success else "NV_INGEST_EMBEDDING_FAILURE"
             status = "EMBEDDED" if success else "FAILED"
             
             # Use provided collection name or fallback
             if not collection_name:
-                collection_name = "bulk_selected_pdfs"
+                collection_name = "bulk_selected_nv_ingest"
             
             event_data = {
                 "timestamp": datetime.now().isoformat(),
@@ -1447,9 +1448,9 @@ echo "Note: ingestion is async; allow processing time."
                 f.write(json.dumps(event_data) + '\n')
             
             if success:
-                logger.info(f"🎯 PDF EMBEDDING SUCCESS: {file_path} → File successfully embedded and tagged")
+                logger.info(f"🎯 NV-INGEST EMBEDDING SUCCESS: {file_path} → File successfully embedded and tagged")
             else:
-                logger.error(f"🎯 PDF EMBEDDING FAILURE: {file_path} → Embedding process failed")
+                logger.error(f"🎯 NV-INGEST EMBEDDING FAILURE: {file_path} → Embedding process failed")
                 
         except Exception as e:
             logger.error(f"❌ Failed to emit embedding completion event for {file_path}: {e}")

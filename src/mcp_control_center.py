@@ -286,6 +286,12 @@ class MCPControlCenter:
         tools = []
         
         try:
+            # Check if server is running first
+            server_status = await self.check_server_status(server_id)
+            if server_status.status != "running":
+                logger.warning(f"Server {server_id} is not running, skipping tool discovery")
+                return []
+            
             if config['type'] == 'stdio':
                 # For stdio servers, we need to send MCP protocol messages
                 # This is complex, so for now we'll use known tools
@@ -302,6 +308,60 @@ class MCPControlCenter:
                             description="List available shares",
                             server=server_id,
                             input_schema={"type": "object", "properties": {}}
+                        )
+                    ]
+                elif server_id == "milvus":
+                    tools = [
+                        MCPTool(
+                            name="list_collections",
+                            description="List all collections in Milvus database",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {}}
+                        ),
+                        MCPTool(
+                            name="get_collection_info",
+                            description="Get information about a specific collection",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {"collection_name": {"type": "string"}}}
+                        ),
+                        MCPTool(
+                            name="search_vectors",
+                            description="Search for similar vectors in a collection",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {"collection_name": {"type": "string"}, "query_vector": {"type": "array"}}}
+                        ),
+                        MCPTool(
+                            name="get_database_status",
+                            description="Get Milvus database status and health",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {}}
+                        )
+                    ]
+                elif server_id == "kubernetes":
+                    tools = [
+                        MCPTool(
+                            name="list_pods",
+                            description="List all pods in the Kubernetes cluster",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {"namespace": {"type": "string"}}}
+                        ),
+                        MCPTool(
+                            name="get_cluster_info",
+                            description="Get Kubernetes cluster information",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {}}
+                        ),
+                        MCPTool(
+                            name="list_jobs",
+                            description="List all jobs in the Kubernetes cluster",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {"namespace": {"type": "string"}}}
+                        ),
+                        MCPTool(
+                            name="get_pod_logs",
+                            description="Get logs from a specific pod",
+                            server=server_id,
+                            input_schema={"type": "object", "properties": {"pod_name": {"type": "string"}, "namespace": {"type": "string"}}}
                         )
                     ]
             else:  # SSE mode
@@ -369,13 +429,17 @@ class MCPControlCenter:
         
         try:
             if config['type'] == 'stdio':
-                # For stdio servers, we need to implement MCP protocol communication
-                # This is complex, so for now we'll return a placeholder
-                return {
-                    "success": True,
-                    "message": f"Tool {tool_name} called on {config['name']} (stdio mode not fully implemented)",
-                    "arguments": arguments
-                }
+                # For stdio servers, implement specific tool functionality
+                if server_id == "milvus":
+                    return await self._call_milvus_tool(tool_name, arguments)
+                elif server_id == "kubernetes":
+                    return await self._call_kubernetes_tool(tool_name, arguments)
+                else:
+                    return {
+                        "success": True,
+                        "message": f"Tool {tool_name} called on {config['name']} (stdio mode not fully implemented)",
+                        "arguments": arguments
+                    }
             else:  # SSE mode
                 if config.get('port'):
                     try:
@@ -398,6 +462,102 @@ class MCPControlCenter:
         
         except Exception as e:
             return {"error": f"Error calling tool: {e}"}
+    
+    async def _call_milvus_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Call Milvus-specific tools"""
+        try:
+            if tool_name == "list_collections":
+                # Get collections from Milvus status
+                milvus_status = await self.get_milvus_status()
+                return {
+                    "success": True,
+                    "collections": milvus_status.get("collections", {}),
+                    "message": "Retrieved Milvus collections"
+                }
+            elif tool_name == "get_database_status":
+                # Get full Milvus status
+                milvus_status = await self.get_milvus_status()
+                return {
+                    "success": True,
+                    "status": milvus_status,
+                    "message": "Retrieved Milvus database status"
+                }
+            elif tool_name == "get_collection_info":
+                collection_name = arguments.get("collection_name", "")
+                if not collection_name:
+                    return {"error": "collection_name parameter is required"}
+                
+                # For now, return basic info - in a real implementation, you'd query Milvus directly
+                return {
+                    "success": True,
+                    "collection_name": collection_name,
+                    "message": f"Collection {collection_name} information retrieved",
+                    "note": "This is a placeholder response. Full Milvus integration would query the actual database."
+                }
+            elif tool_name == "search_vectors":
+                collection_name = arguments.get("collection_name", "")
+                if not collection_name:
+                    return {"error": "collection_name parameter is required"}
+                
+                return {
+                    "success": True,
+                    "collection_name": collection_name,
+                    "message": f"Vector search in {collection_name} completed",
+                    "note": "This is a placeholder response. Full Milvus integration would perform actual vector search."
+                }
+            else:
+                return {"error": f"Unknown Milvus tool: {tool_name}"}
+        except Exception as e:
+            return {"error": f"Error calling Milvus tool: {e}"}
+    
+    async def _call_kubernetes_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Call Kubernetes-specific tools"""
+        try:
+            if tool_name == "list_pods":
+                namespace = arguments.get("namespace", "default")
+                # For now, return placeholder - in a real implementation, you'd use kubectl or k8s API
+                return {
+                    "success": True,
+                    "namespace": namespace,
+                    "pods": [],
+                    "message": f"Listed pods in namespace {namespace}",
+                    "note": "This is a placeholder response. Full Kubernetes integration would query the actual cluster."
+                }
+            elif tool_name == "get_cluster_info":
+                # Get cluster info from Kubernetes status
+                k8s_status = await self.get_kubernetes_status()
+                return {
+                    "success": True,
+                    "cluster_info": k8s_status,
+                    "message": "Retrieved Kubernetes cluster information"
+                }
+            elif tool_name == "list_jobs":
+                namespace = arguments.get("namespace", "default")
+                return {
+                    "success": True,
+                    "namespace": namespace,
+                    "jobs": [],
+                    "message": f"Listed jobs in namespace {namespace}",
+                    "note": "This is a placeholder response. Full Kubernetes integration would query the actual cluster."
+                }
+            elif tool_name == "get_pod_logs":
+                pod_name = arguments.get("pod_name", "")
+                namespace = arguments.get("namespace", "default")
+                if not pod_name:
+                    return {"error": "pod_name parameter is required"}
+                
+                return {
+                    "success": True,
+                    "pod_name": pod_name,
+                    "namespace": namespace,
+                    "logs": "",
+                    "message": f"Retrieved logs for pod {pod_name} in namespace {namespace}",
+                    "note": "This is a placeholder response. Full Kubernetes integration would retrieve actual logs."
+                }
+            else:
+                return {"error": f"Unknown Kubernetes tool: {tool_name}"}
+        except Exception as e:
+            return {"error": f"Error calling Kubernetes tool: {e}"}
     
     async def get_milvus_status(self) -> Dict[str, Any]:
         """Get detailed Milvus database status"""
