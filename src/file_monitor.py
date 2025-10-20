@@ -59,6 +59,7 @@ class FileMonitor:
         self.known_files = set()  # Track files we've already seen
         self.tagged_files = set()  # Track files we've successfully tagged (prevents reprocessing)
         self.tier0_demoted_folders = set()  # Track folders that have been demoted from tier0 (prevents duplicate demotions)
+        self.embedding_tagged_files = set()  # Track files with embedding tag for tier operations
         self.running = False
         self.batch_interval = 15  # seconds
         self.poll_interval = 2  # seconds between directory scans
@@ -1167,6 +1168,8 @@ echo "Note: ingestion is async; allow processing time."
                     self.tier0_demotion_in_progress = True
                     if self.remove_tier0_objective_by_tag("embedding"):
                         logger.info(f"🎯 TIER0 DEMOTION: All files with 'embedding' tag → Demoted from tier0 after embeddings confirmed")
+                        # Clean up the embedding tag tracking for this file
+                        self.embedding_tagged_files.discard(file_path)
                     self.tier0_demotion_in_progress = False
                 
                 return True
@@ -1420,6 +1423,8 @@ echo "Note: ingestion is async; allow processing time."
             
             if result.returncode == 0:
                 logger.info(f"✅ EMBEDDING TAG: {file_path} → Tagged for embedding")
+                # Track this file in memory for tier operations
+                self.embedding_tagged_files.add(file_path)
                 return True
             else:
                 logger.error(f"❌ Failed to tag {file_path} with embedding: {result.stderr}")
@@ -1469,11 +1474,20 @@ echo "Note: ingestion is async; allow processing time."
         try:
             # Use hs tag list to find files with the specific tag
             cmd = ["/home/ubuntu/.local/bin/hs", "tag", "list", "-r", search_path]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            # Use subprocess with error handling for Unicode issues
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, 
+                                      encoding='utf-8', errors='replace')
+            except UnicodeDecodeError:
+                # Fallback to latin-1 encoding if utf-8 fails
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                                      encoding='latin-1', errors='replace')
             
             if result.returncode != 0:
                 logger.error(f"❌ Failed to list tags: {result.stderr}")
-                return []
+                # If hs tag list fails, try a simpler approach using os.walk
+                return self.find_files_by_tag_fallback(tag_name, search_path)
             
             # Parse the output to find files with the specific tag
             tagged_files = []
@@ -1501,6 +1515,38 @@ echo "Note: ingestion is async; allow processing time."
             
         except Exception as e:
             logger.error(f"❌ Error finding files by tag '{tag_name}': {e}")
+            # Fallback to simple file system search
+            return self.find_files_by_tag_fallback(tag_name, search_path)
+
+    def find_files_by_tag_fallback(self, tag_name: str, search_path: str = "/mnt/anvil/hub") -> list:
+        """Fallback method to find files with a specific tag using individual file checks."""
+        try:
+            logger.info(f"🔍 Using fallback method to find files with tag '{tag_name}'")
+            tagged_files = []
+            
+            # Walk through the directory and check each file individually
+            for root, dirs, files in os.walk(search_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        # Check if this file has the specific tag
+                        cmd = ["/home/ubuntu/.local/bin/hs", "tag", "list", file_path]
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10,
+                                              encoding='utf-8', errors='replace')
+                        
+                        if result.returncode == 0 and f'NAME = "{tag_name}"' in result.stdout:
+                            tagged_files.append(file_path)
+                            logger.debug(f"🔍 Found file with tag '{tag_name}': {file_path}")
+                            
+                    except Exception as e:
+                        logger.debug(f"⚠️ Could not check tags for {file_path}: {e}")
+                        continue
+            
+            logger.info(f"🔍 Fallback method found {len(tagged_files)} files with tag '{tag_name}'")
+            return tagged_files
+            
+        except Exception as e:
+            logger.error(f"❌ Error in fallback tag search for '{tag_name}': {e}")
             return []
 
     def apply_tier0_objective_by_tag(self, tag_name: str) -> bool:
@@ -1508,12 +1554,12 @@ echo "Note: ingestion is async; allow processing time."
         try:
             logger.info(f"🎯 TIER0 PROMOTION: Applying Place-on-tier0 objective to all files with tag '{tag_name}'")
             
-            # Add a small delay for NFS timing issues
-            import time
-            time.sleep(2)
-            
-            # Find all files with the embedding tag
-            tagged_files = self.find_files_by_tag(tag_name)
+            # Use in-memory tracking for embedding tag
+            if tag_name == "embedding":
+                tagged_files = list(self.embedding_tagged_files)
+            else:
+                # For other tags, use the file system search
+                tagged_files = self.find_files_by_tag(tag_name)
             
             if not tagged_files:
                 logger.info(f"ℹ️ No files found with tag '{tag_name}' for tier0 promotion")
@@ -1562,8 +1608,12 @@ echo "Note: ingestion is async; allow processing time."
         try:
             logger.info(f"🎯 TIER0 DEMOTION: Removing Place-on-tier0 objective from all files with tag '{tag_name}'")
             
-            # Find all files with the embedding tag
-            tagged_files = self.find_files_by_tag(tag_name)
+            # Use in-memory tracking for embedding tag
+            if tag_name == "embedding":
+                tagged_files = list(self.embedding_tagged_files)
+            else:
+                # For other tags, use the file system search
+                tagged_files = self.find_files_by_tag(tag_name)
             
             if not tagged_files:
                 logger.info(f"ℹ️ No files found with tag '{tag_name}' for tier0 demotion")
