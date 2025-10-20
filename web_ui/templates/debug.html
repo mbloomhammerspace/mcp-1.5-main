@@ -13,17 +13,17 @@
         
         body {
             font-family: 'Courier New', monospace;
-            background: #1e1e1e;
-            color: #d4d4d4;
+            background: #f8fafc;
+            color: #1e3a8a;
             height: 100vh;
             display: flex;
             flex-direction: column;
         }
         
         .header {
-            background: #252526;
+            background: #1e3a8a;
             padding: 15px 20px;
-            border-bottom: 2px solid #007acc;
+            border-bottom: 2px solid #3b82f6;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -31,7 +31,7 @@
         
         .header h1 {
             font-size: 18px;
-            color: #007acc;
+            color: white;
             font-weight: normal;
         }
         
@@ -41,7 +41,7 @@
         }
         
         button {
-            background: #0e639c;
+            background: #3b82f6;
             color: white;
             border: none;
             padding: 8px 16px;
@@ -52,7 +52,7 @@
         }
         
         button:hover {
-            background: #1177bb;
+            background: #2563eb;
         }
         
         button.danger {
@@ -75,39 +75,49 @@
             margin-bottom: 2px;
             white-space: pre-wrap;
             word-break: break-all;
+            padding: 4px 8px;
+            border-radius: 3px;
+        }
+        
+        .log-line:nth-child(even) {
+            background-color: #f1f5f9;
+        }
+        
+        .log-line:nth-child(odd) {
+            background-color: #ffffff;
         }
         
         .log-line.error {
-            color: #f48771;
-            background: rgba(244, 135, 113, 0.1);
+            color: #dc2626;
+            background: rgba(220, 38, 38, 0.1) !important;
         }
         
         .log-line.warning {
-            color: #dcdcaa;
-            background: rgba(220, 220, 170, 0.1);
+            color: #d97706;
+            background: rgba(217, 119, 6, 0.1) !important;
         }
         
         .log-line.info {
-            color: #4ec9b0;
+            color: #1e3a8a;
         }
         
         .log-line.mcp {
-            color: #569cd6;
+            color: #3b82f6;
             font-weight: bold;
         }
         
         .log-line.hstk {
-            color: #ce9178;
+            color: #1e40af;
             font-weight: bold;
         }
         
         .log-line.tool {
-            color: #c586c0;
-            background: rgba(197, 134, 192, 0.1);
+            color: #7c3aed;
+            background: rgba(124, 58, 237, 0.1) !important;
         }
         
         .timestamp {
-            color: #858585;
+            color: #64748b;
             margin-right: 10px;
         }
         
@@ -122,26 +132,26 @@
         }
         
         .stats {
-            background: #252526;
+            background: #1e3a8a;
             padding: 10px 20px;
-            border-top: 1px solid #3c3c3c;
+            border-top: 1px solid #3b82f6;
             display: flex;
             gap: 30px;
             font-size: 12px;
         }
         
         .stat {
-            color: #858585;
+            color: #cbd5e1;
         }
         
         .stat-value {
-            color: #4ec9b0;
+            color: white;
             font-weight: bold;
             margin-left: 5px;
         }
         
         .auto-scroll {
-            background: #0e639c;
+            background: #3b82f6;
             color: white;
             padding: 10px 20px;
             position: fixed;
@@ -154,7 +164,7 @@
         }
         
         .auto-scroll.disabled {
-            background: #6e6e6e;
+            background: #94a3b8;
         }
     </style>
 </head>
