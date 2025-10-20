@@ -419,13 +419,13 @@
                     <label>Event Type</label>
                     <select id="filter-event-type">
                         <option value="">All Events</option>
-                        <option value="NEW_FILE">New Files/Folders Only</option>
+                        <option value="NEW_FILES">New Files/Folders Only</option>
                         <option value="RETROACTIVE_TAG">Retroactive Tags Only</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label>File/Folder Name Pattern</label>
-                    <input type="text" id="filter-file-pattern" placeholder="e.g., .pdf, test-, nv-ingest">
+                    <input type="text" id="filter-file-pattern" placeholder="e.g., .pdf, .docx, .txt, test-">
                 </div>
                 <div class="filter-group">
                     <label>Limit</label>
@@ -539,7 +539,7 @@
         // Create event card
         function createEventCard(event) {
             const card = document.createElement('div');
-            const eventType = event.event_type === 'NEW_FILE' ? 'new-file' : 'retroactive';
+            const eventType = event.event_type === 'NEW_FILES' ? 'new-file' : 'retroactive';
             card.className = `event-card ${eventType}`;
             
             const timestamp = new Date(event.timestamp).toLocaleString();

@@ -339,7 +339,7 @@ class FileMonitor:
                 if tagged:
                     event_data = {
                         "timestamp": ingest_time,
-                        "event_type": "NEW_FILE",
+                        "event_type": "NEW_FILES",
                         "file_name": os.path.basename(file_path),
                         "file_path": file_path,
                         "md5_hash": md5_hash,
@@ -605,9 +605,11 @@ class FileMonitor:
     
     def should_trigger_nv_ingest(self, file_path: str, mime_type: str) -> bool:
         """Check if a file should trigger an nv-ingest job."""
-        # Check if it's an nv-ingest file (starts with "nv-ingest")
-        filename = os.path.basename(file_path)
-        if not filename.startswith('nv-ingest'):
+        # Check if it's a supported file type (any DOCX, PDF, PPTX, CSV, or TXT file)
+        supported_extensions = {'.pdf', '.docx', '.pptx', '.csv', '.txt'}
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        if file_ext not in supported_extensions:
             return False
         
         # Check if it's in the hub directory
@@ -622,10 +624,10 @@ class FileMonitor:
             age_hours = (current_time - atime) / 3600
             
             if age_hours > 12:
-                logger.info(f"📄 nv-ingest file {file_path} is {age_hours:.1f} hours old, skipping ingest")
+                logger.info(f"📄 {file_ext.upper()} file {file_path} is {age_hours:.1f} hours old, skipping ingest")
                 return False
                 
-            logger.info(f"📄 nv-ingest file {file_path} is {age_hours:.1f} hours old, will trigger ingest")
+            logger.info(f"📄 {file_ext.upper()} file {file_path} is {age_hours:.1f} hours old, will trigger ingest")
             return True
             
         except Exception as e:
@@ -657,19 +659,54 @@ class FileMonitor:
         try:
             logger.info(f"🚀 Triggering folder ingest job for: {folder_path}")
             
-            # Get all nv-ingest files in the folder
-            nv_ingest_files = []
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    if file.startswith('nv-ingest'):
-                        file_path = os.path.join(root, file)
-                        nv_ingest_files.append(file_path)
+            # Quick check: look for any supported file types in the top level first
+            try:
+                top_level_files = os.listdir(folder_path)
+                supported_extensions = {'.pdf', '.docx', '.pptx', '.csv', '.txt'}
+                has_supported_files = any(os.path.splitext(f)[1].lower() in supported_extensions for f in top_level_files if os.path.isfile(os.path.join(folder_path, f)))
+                if not has_supported_files:
+                    # Check if any subdirectories might contain supported files
+                    has_subdirs = any(os.path.isdir(os.path.join(folder_path, d)) for d in top_level_files)
+                    if not has_subdirs:
+                        logger.info(f"📁 No supported file types (.pdf, .docx, .pptx, .csv, .txt) found in: {folder_path}")
+                        return False, ""
+            except Exception as e:
+                logger.warning(f"📁 Could not perform quick check on {folder_path}: {e}")
             
-            if not nv_ingest_files:
-                logger.info(f"📁 No nv-ingest files found in folder: {folder_path}")
+            # Get all supported files in the folder with retry for NFS timing issues
+            supported_files = []
+            max_retries = 5
+            retry_delay = 5  # seconds
+            supported_extensions = {'.pdf', '.docx', '.pptx', '.csv', '.txt'}
+            
+            for attempt in range(max_retries):
+                supported_files = []
+                logger.info(f"📁 Starting recursive search in folder: {folder_path} (attempt {attempt + 1}/{max_retries})")
+                
+                for root, dirs, files in os.walk(folder_path):
+                    logger.info(f"📁 Scanning: {root} (dirs: {dirs}, files: {files})")
+                    for file in files:
+                        file_ext = os.path.splitext(file)[1].lower()
+                        if file_ext in supported_extensions:
+                            file_path = os.path.join(root, file)
+                            supported_files.append(file_path)
+                            logger.info(f"📁 Found supported file: {file_path}")
+                
+                logger.info(f"📁 Recursive search complete. Found {len(supported_files)} supported files")
+                
+                if supported_files:
+                    break  # Found files, exit retry loop
+                elif attempt < max_retries - 1:
+                    logger.info(f"📁 No supported files found, retrying in {retry_delay}s (NFS timing issue)...")
+                    time.sleep(retry_delay)
+            
+            if not supported_files:
+                logger.info(f"📁 No supported files found in folder after {max_retries} attempts: {folder_path}")
+                # Schedule a delayed retry for this folder (in case files appear later)
+                self.schedule_delayed_folder_retry(folder_path)
                 return False, ""
             
-            logger.info(f"📁 Found {len(nv_ingest_files)} nv-ingest files in folder: {folder_path}")
+            logger.info(f"📁 Found {len(supported_files)} supported files in folder: {folder_path}")
             
             # Use folder name for collection (sanitized)
             folder_name = os.path.basename(folder_path)
@@ -680,7 +717,7 @@ class FileMonitor:
             
             # Create and deploy the job
             job_name = f"folder-ingest-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            success = self.create_nv_ingest_job(nv_ingest_files, job_name, collection_name)
+            success = self.create_nv_ingest_job(supported_files, job_name, collection_name)
             
             if success:
                 # Log success event
@@ -689,7 +726,7 @@ class FileMonitor:
                     "event_type": "FOLDER_INGEST_SUCCESS",
                     "folder_name": folder_name,
                     "folder_path": folder_path,
-                    "file_count": len(nv_ingest_files),
+                    "file_count": len(supported_files),
                     "status": "SUCCESS",
                     "job_type": "folder_ingest",
                     "collection_name": collection_name,
@@ -698,7 +735,7 @@ class FileMonitor:
                 with open(log_file, 'a') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
-                logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(nv_ingest_files)} files deployed to {collection_name}")
+                logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(supported_files)} files deployed to {collection_name}")
                 
                 # Tag all files in the folder with collectionid
                 self.tag_folder_files_with_collectionid(folder_path, collection_name)
@@ -735,6 +772,25 @@ class FileMonitor:
         except Exception as e:
             logger.error(f"❌ Error triggering folder ingest job for {folder_path}: {e}")
             return False, ""
+
+    def schedule_delayed_folder_retry(self, folder_path: str):
+        """Schedule a delayed retry for folder processing (for NFS timing issues)."""
+        def delayed_retry():
+            logger.info(f"🔄 Delayed retry for folder: {folder_path}")
+            # Wait a bit more for NFS to catch up
+            time.sleep(10)
+            # Try to process the folder again
+            success, collection_name = self.trigger_folder_ingest_job(folder_path)
+            if success:
+                logger.info(f"✅ Delayed retry successful for {folder_path} → {collection_name}")
+            else:
+                logger.info(f"❌ Delayed retry failed for {folder_path}")
+        
+        # Schedule the retry in a separate thread
+        import threading
+        retry_thread = threading.Thread(target=delayed_retry, daemon=True)
+        retry_thread.start()
+        logger.info(f"⏰ Scheduled delayed retry for {folder_path} in 10 seconds")
     
     def get_next_collection_name(self) -> str:
         """Get the next available collection name in the format intel-X."""

@@ -417,7 +417,7 @@
                     <label>Event Type</label>
                     <select class="filter-select" id="eventTypeFilter">
                         <option value="">All Events</option>
-                        <option value="NEW_FILE">New Files</option>
+                        <option value="NEW_FILES">New Files</option>
                         <option value="RETROACTIVE_TAG">Retroactive Tags</option>
                         <option value="PDF_INGEST_SUCCESS">PDF Ingest Success</option>
                         <option value="PDF_INGEST_FAILURE">PDF Ingest Failure</option>
@@ -600,7 +600,7 @@
         
         function getEventClass(eventType) {
             switch (eventType) {
-                case 'NEW_FILE': return 'new-file';
+                case 'NEW_FILES': return 'new-file';
                 case 'RETROACTIVE_TAG': return 'retroactive-tag';
                 case 'PDF_INGEST_SUCCESS': return 'pdf-ingest-success';
                 case 'PDF_INGEST_FAILURE': return 'pdf-ingest-failure';
@@ -613,7 +613,7 @@
         
         function getTypeClass(eventType) {
             switch (eventType) {
-                case 'NEW_FILE': return 'new-file';
+                case 'NEW_FILES': return 'new-file';
                 case 'RETROACTIVE_TAG': return 'retroactive-tag';
                 case 'PDF_INGEST_SUCCESS': return 'pdf-ingest-success';
                 case 'PDF_INGEST_FAILURE': return 'pdf-ingest-failure';
@@ -641,7 +641,7 @@
         
         function updateStats() {
             const totalEvents = events.length;
-            const newFilesCount = events.filter(e => e.event_type === 'NEW_FILE').length;
+            const newFilesCount = events.filter(e => e.event_type === 'NEW_FILES').length;
             const pdfIngestCount = events.filter(e => e.event_type.includes('PDF_INGEST')).length;
             const pdfEmbeddingCount = events.filter(e => e.event_type.includes('PDF_EMBEDDING')).length;
             const milvusConfirmedCount = events.filter(e => e.event_type === 'MILVUS_EMBEDDINGS_CONFIRMED').length;
