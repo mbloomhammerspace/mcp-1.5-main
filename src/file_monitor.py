@@ -58,6 +58,7 @@ class FileMonitor:
         self.event_queue = defaultdict(list)  # path -> list of events
         self.known_files = set()  # Track files we've already seen
         self.tagged_files = set()  # Track files we've successfully tagged (prevents reprocessing)
+        self.tier0_demoted_folders = set()  # Track folders that have been demoted from tier0 (prevents duplicate demotions)
         self.running = False
         self.batch_interval = 15  # seconds
         self.poll_interval = 2  # seconds between directory scans
@@ -701,6 +702,9 @@ class FileMonitor:
                 # Tag all files in the folder with collectionid
                 self.tag_folder_files_with_collectionid(folder_path, collection_name)
                 
+                # Apply Place-on-tier0 objective for high-performance access during processing
+                self.apply_tier0_objective(folder_path, collection_name)
+                
                 # Schedule job completion check
                 try:
                     threading.Timer(30.0, self.check_job_completion, args=[folder_path, collection_name]).start()
@@ -1062,6 +1066,14 @@ echo "Note: ingestion is async; allow processing time."
                 self.emit_embedding_completion_event(file_path, True, collection_name, milvus_verified=True)
                 # Emit specific Milvus confirmation event
                 self.emit_milvus_embeddings_confirmed(file_path, collection_name)
+                
+                # Remove Place-on-tier0 objective after embeddings are confirmed in Milvus
+                # Only do this for folders (directories), not individual files
+                # Check if we've already demoted this folder to prevent duplicates
+                if os.path.isdir(file_path) and file_path not in self.tier0_demoted_folders:
+                    self.remove_tier0_objective(file_path, collection_name)
+                    self.tier0_demoted_folders.add(file_path)
+                
                 return True
             
             return False
@@ -1278,6 +1290,133 @@ echo "Note: ingestion is async; allow processing time."
                 
         except Exception as e:
             logger.error(f"❌ Error tagging collectionid for {file_path}: {e}")
+            return False
+    
+    def apply_tier0_objective(self, folder_path: str, collection_name: str) -> bool:
+        """Apply Place-on-tier0 objective to a folder for high-performance access during processing."""
+        try:
+            logger.info(f"🎯 TIER0 PROMOTION: Applying Place-on-tier0 objective to {folder_path}")
+            
+            # Use hs objective add to apply Place-on-tier0 objective
+            obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "add", "Place-on-tier0", folder_path]
+            result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logger.info(f"✅ TIER0 PROMOTION SUCCESS: {folder_path} → Place-on-tier0 objective applied")
+                
+                # Remove from demoted set since we're promoting it
+                self.tier0_demoted_folders.discard(folder_path)
+                
+                # Log to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_PROMOTION",
+                    "folder_path": folder_path,
+                    "collection_name": collection_name,
+                    "objective": "Place-on-tier0",
+                    "status": "SUCCESS",
+                    "message": f"Folder promoted to tier0 for high-performance processing"
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return True
+            else:
+                logger.error(f"❌ TIER0 PROMOTION FAILED: {folder_path} → {result.stderr}")
+                
+                # Log failure to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_PROMOTION_FAILED",
+                    "folder_path": folder_path,
+                    "collection_name": collection_name,
+                    "objective": "Place-on-tier0",
+                    "status": "FAILED",
+                    "error": result.stderr
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error applying tier0 objective to {folder_path}: {e}")
+            
+            # Log error to debug log
+            event_data = {
+                "timestamp": datetime.now().isoformat(),
+                "event_type": "TIER0_PROMOTION_ERROR",
+                "folder_path": folder_path,
+                "collection_name": collection_name,
+                "objective": "Place-on-tier0",
+                "status": "ERROR",
+                "error": str(e)
+            }
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(event_data) + '\n')
+            
+            return False
+    
+    def remove_tier0_objective(self, folder_path: str, collection_name: str) -> bool:
+        """Remove Place-on-tier0 objective from a folder after embeddings are confirmed in Milvus."""
+        try:
+            logger.info(f"🎯 TIER0 DEMOTION: Removing Place-on-tier0 objective from {folder_path}")
+            
+            # Use hs objective delete to remove Place-on-tier0 objective
+            obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "delete", "Place-on-tier0", folder_path]
+            result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logger.info(f"✅ TIER0 DEMOTION SUCCESS: {folder_path} → Place-on-tier0 objective removed")
+                
+                # Log to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_DEMOTION",
+                    "folder_path": folder_path,
+                    "collection_name": collection_name,
+                    "objective": "Place-on-tier0",
+                    "status": "SUCCESS",
+                    "message": f"Folder demoted from tier0 after embeddings confirmed in Milvus"
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return True
+            else:
+                logger.error(f"❌ TIER0 DEMOTION FAILED: {folder_path} → {result.stderr}")
+                
+                # Log failure to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_DEMOTION_FAILED",
+                    "folder_path": folder_path,
+                    "collection_name": collection_name,
+                    "objective": "Place-on-tier0",
+                    "status": "FAILED",
+                    "error": result.stderr
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error removing tier0 objective from {folder_path}: {e}")
+            
+            # Log error to debug log
+            event_data = {
+                "timestamp": datetime.now().isoformat(),
+                "event_type": "TIER0_DEMOTION_ERROR",
+                "folder_path": folder_path,
+                "collection_name": collection_name,
+                "objective": "Place-on-tier0",
+                "status": "ERROR",
+                "error": str(e)
+            }
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(event_data) + '\n')
+            
             return False
     
     def emit_embedding_completion_event(self, file_path: str, success: bool, collection_name: str = None, milvus_verified: bool = False):

@@ -50,6 +50,11 @@ else:
 MCP_SERVER_PATH = "/home/ubuntu/mcp-1.5-main/src/aiq_hstk_mcp_server.py"
 MCP_SERVER_ENV = {"PYTHONPATH": "/home/ubuntu/mcp-1.5-main"}
 
+# Import MCP Control Center
+import sys
+sys.path.append('/home/ubuntu/mcp-1.5-main/src')
+from mcp_control_center import mcp_control_center
+
 # Store conversation history
 conversation_history = []
 
@@ -90,6 +95,11 @@ def convert_mcp_tools_to_anthropic_format(mcp_tools):
 def index():
     """Render the main UI"""
     return render_template('index.html')
+
+@app.route('/mcp')
+def mcp_control():
+    """Render the MCP control center"""
+    return render_template('mcp_control.html')
 
 @app.route('/debug')
 def debug():
@@ -578,6 +588,133 @@ def get_events():
             'success': False,
             'error': str(e),
             'events': []
+        }), 500
+
+@app.route('/api/mcp/status')
+def api_mcp_status():
+    """API endpoint to get MCP server status"""
+    try:
+        # Run async function in sync context
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        status = loop.run_until_complete(mcp_control_center.get_unified_status())
+        loop.close()
+        
+        return jsonify({
+            "success": True,
+            "status": status
+        })
+    except Exception as e:
+        logger.error(f"Error getting MCP status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/mcp/milvus')
+def api_mcp_milvus():
+    """API endpoint to get Milvus status"""
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        status = loop.run_until_complete(mcp_control_center.get_milvus_status())
+        loop.close()
+        
+        return jsonify({
+            "success": True,
+            "milvus": status
+        })
+    except Exception as e:
+        logger.error(f"Error getting Milvus status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/mcp/kubernetes')
+def api_mcp_kubernetes():
+    """API endpoint to get Kubernetes status"""
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        status = loop.run_until_complete(mcp_control_center.get_kubernetes_status())
+        loop.close()
+        
+        return jsonify({
+            "success": True,
+            "kubernetes": status
+        })
+    except Exception as e:
+        logger.error(f"Error getting Kubernetes status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/mcp/hammerspace')
+def api_mcp_hammerspace():
+    """API endpoint to get Hammerspace status"""
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        status = loop.run_until_complete(mcp_control_center.get_hammerspace_status())
+        loop.close()
+        
+        return jsonify({
+            "success": True,
+            "hammerspace": status
+        })
+    except Exception as e:
+        logger.error(f"Error getting Hammerspace status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/mcp/start/<server_id>')
+def api_mcp_start_server(server_id):
+    """API endpoint to start an MCP server"""
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        success = loop.run_until_complete(mcp_control_center.start_server(server_id))
+        loop.close()
+        
+        return jsonify({
+            "success": success,
+            "message": f"Server {server_id} {'started' if success else 'failed to start'}"
+        })
+    except Exception as e:
+        logger.error(f"Error starting server {server_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/mcp/stop/<server_id>')
+def api_mcp_stop_server(server_id):
+    """API endpoint to stop an MCP server"""
+    try:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        success = loop.run_until_complete(mcp_control_center.stop_server(server_id))
+        loop.close()
+        
+        return jsonify({
+            "success": success,
+            "message": f"Server {server_id} {'stopped' if success else 'failed to stop'}"
+        })
+    except Exception as e:
+        logger.error(f"Error stopping server {server_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
         }), 500
 
 if __name__ == '__main__':
