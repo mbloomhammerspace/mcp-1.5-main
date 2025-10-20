@@ -774,12 +774,20 @@ class FileMonitor:
                 logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(supported_files)} files deployed to {collection_name}")
                 
                 # Tag all files in the folder with collectionid and embedding tag
+                import time
+                start_time = time.time()
+                
                 self.tag_folder_files_with_collectionid(folder_path, collection_name)
-                self.tag_folder_files_with_embedding(folder_path)
+                self.tag_folder_with_embedding(folder_path)
+                
+                tagging_time = time.time() - start_time
+                logger.info(f"⏱️ FOLDER TAGGING PERFORMANCE: {folder_path} → Tagged {len(supported_files)} files in {tagging_time:.2f}s ({len(supported_files)/tagging_time:.1f} files/sec)")
                 
                 # Apply tier0 objective to all files with embedding tag
+                tier_start_time = time.time()
                 if self.apply_tier0_objective_by_tag("embedding"):
-                    logger.info(f"🎯 TIER0 PROMOTION: All files with 'embedding' tag → Moved to tier0 for processing")
+                    tier_time = time.time() - tier_start_time
+                    logger.info(f"🎯 TIER0 PROMOTION: All files with 'embedding' tag → Moved to tier0 for processing (took {tier_time:.2f}s)")
                 
                 # Schedule job completion check
                 try:
@@ -1434,40 +1442,27 @@ echo "Note: ingestion is async; allow processing time."
             logger.error(f"❌ Error tagging {file_path} with embedding: {e}")
             return False
 
-    def tag_folder_files_with_embedding(self, folder_path: str) -> int:
-        """Tag all supported files in a folder with embedding tag. Returns number of files tagged."""
+    def tag_folder_with_embedding(self, folder_path: str) -> bool:
+        """Tag the entire folder recursively with embedding tag. Much faster than individual file tagging."""
         try:
-            logger.info(f"🏷️ Tagging supported files in {folder_path} with embedding tag")
-
-            tagged_count = 0
-            supported_extensions = {
-                '.bmp', '.docx', '.html', '.jpeg', '.jpg', '.json', '.md',
-                '.pdf', '.png', '.pptx', '.sh', '.tiff', '.tif', '.txt', '.mp3'
-            }
-
-            # Walk through all files in the folder
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-
-                    # Skip hidden files
-                    if file.startswith('.'):
-                        continue
-
-                    # Only tag supported file types
-                    file_ext = os.path.splitext(file)[1].lower()
-                    if file_ext in supported_extensions:
-                        if self.tag_file_with_embedding(file_path):
-                            tagged_count += 1
-                    else:
-                        logger.debug(f"📄 Skipping unsupported file type for embedding tag: {file_path} (extension: {file_ext})")
-
-            logger.info(f"✅ EMBEDDING TAGGING: {folder_path} → {tagged_count} supported files tagged with embedding")
-            return tagged_count
-
+            logger.info(f"🏷️ Tagging folder recursively with embedding tag: {folder_path}")
+            
+            # Use recursive tagging to tag the entire folder hierarchy at once
+            cmd = [self.hs_cli, "tag", "set", "embedding", "-r", folder_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(folder_path))
+            
+            if result.returncode == 0:
+                logger.info(f"✅ FOLDER EMBEDDING TAG: {folder_path} → Entire folder tagged recursively with embedding")
+                # Track this folder in memory for tier operations
+                self.embedding_tagged_files.add(folder_path)
+                return True
+            else:
+                logger.error(f"❌ Failed to tag folder {folder_path} with embedding: {result.stderr}")
+                return False
+                
         except Exception as e:
-            logger.error(f"❌ Error tagging folder files with embedding: {e}")
-            return 0
+            logger.error(f"❌ Error tagging folder with embedding: {e}")
+            return False
 
     def find_files_by_tag(self, tag_name: str, search_path: str = "/mnt/anvil/hub") -> list:
         """Find all files with a specific tag in the search path."""
@@ -1567,13 +1562,20 @@ echo "Note: ingestion is async; allow processing time."
             
             success_count = 0
             for file_path in tagged_files:
-                # Apply tier0 objective to each file individually
-                obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "add", "Place-on-tier0", file_path]
+                # Apply tier0 objective - use recursive for folders, individual for files
+                if os.path.isdir(file_path):
+                    obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "add", "Place-on-tier0", "-r", file_path]
+                else:
+                    obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "add", "Place-on-tier0", file_path]
+                
                 result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
                 
                 if result.returncode == 0:
                     success_count += 1
-                    logger.debug(f"✅ TIER0 PROMOTION: {file_path} → Place-on-tier0 objective applied")
+                    if os.path.isdir(file_path):
+                        logger.debug(f"✅ TIER0 PROMOTION: {file_path} → Place-on-tier0 objective applied recursively")
+                    else:
+                        logger.debug(f"✅ TIER0 PROMOTION: {file_path} → Place-on-tier0 objective applied")
                 else:
                     logger.error(f"❌ TIER0 PROMOTION FAILED: {file_path} → {result.stderr}")
             
@@ -1621,13 +1623,20 @@ echo "Note: ingestion is async; allow processing time."
             
             success_count = 0
             for file_path in tagged_files:
-                # Remove tier0 objective from each file individually
-                obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "delete", "Place-on-tier0", file_path]
+                # Remove tier0 objective - use recursive for folders, individual for files
+                if os.path.isdir(file_path):
+                    obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "delete", "Place-on-tier0", "-r", file_path]
+                else:
+                    obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "delete", "Place-on-tier0", file_path]
+                
                 result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
                 
                 if result.returncode == 0:
                     success_count += 1
-                    logger.debug(f"✅ TIER0 DEMOTION: {file_path} → Place-on-tier0 objective removed")
+                    if os.path.isdir(file_path):
+                        logger.debug(f"✅ TIER0 DEMOTION: {file_path} → Place-on-tier0 objective removed recursively")
+                    else:
+                        logger.debug(f"✅ TIER0 DEMOTION: {file_path} → Place-on-tier0 objective removed")
                 else:
                     logger.error(f"❌ TIER0 DEMOTION FAILED: {file_path} → {result.stderr}")
             
