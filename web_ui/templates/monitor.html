@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Ingest Monitor - Hammerspace MCP</title>
+    <title>File/Folder Ingest Monitor - Hammerspace MCP</title>
     <style>
         * {
             margin: 0;
@@ -384,8 +384,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 File Ingest Monitor</h1>
-            <p>Real-time tracking of file ingestion and tagging events</p>
+            <h1>📊 File/Folder Ingest Monitor</h1>
+            <p>Real-time tracking of file and folder ingestion and tagging events</p>
             <div class="nav-links">
                 <a href="/">← Back to Chat</a>
                 <a href="/debug">Debug Console</a>
@@ -403,7 +403,7 @@
                 <div id="total-events" class="value">0</div>
             </div>
             <div class="stat-card">
-                <h3>Files Tagged</h3>
+                <h3>Files/Folders Tagged</h3>
                 <div id="files-tagged" class="value">0</div>
             </div>
             <div class="stat-card">
@@ -419,13 +419,13 @@
                     <label>Event Type</label>
                     <select id="filter-event-type">
                         <option value="">All Events</option>
-                        <option value="NEW_FILE">New Files Only</option>
+                        <option value="NEW_FILE">New Files/Folders Only</option>
                         <option value="RETROACTIVE_TAG">Retroactive Tags Only</option>
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label>File Name Pattern</label>
-                    <input type="text" id="filter-file-pattern" placeholder="e.g., .pdf, test-">
+                    <label>File/Folder Name Pattern</label>
+                    <input type="text" id="filter-file-pattern" placeholder="e.g., .pdf, test-, nv-ingest">
                 </div>
                 <div class="filter-group">
                     <label>Limit</label>
@@ -461,7 +461,7 @@
 
     <div id="toast" class="toast">
         <div class="toast-header">
-            <span class="toast-title">New File Ingested</span>
+            <span class="toast-title">New File/Folder Ingested</span>
             <button class="toast-close" onclick="hideToast()">×</button>
         </div>
         <div class="toast-body" id="toast-body"></div>
@@ -634,7 +634,7 @@
                     document.getElementById('total-events').textContent = currentCount + 1;
                     
                     // Show toast
-                    showToast(`New file: ${event.file_name}`);
+                    showToast(`New file/folder: ${event.file_name}`);
                     
                     // Limit to 100 events in DOM
                     while (eventsList.children.length > 100) {

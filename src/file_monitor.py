@@ -1535,7 +1535,7 @@ class FileMonitorService:
             
             return {
                 "success": True,
-                "message": "File monitor started (polling mode - NFS compatible)",
+                "message": "File/folder monitor started (polling mode - NFS compatible)",
                 "watch_paths": self.monitor.watch_paths,
                 "batch_interval": self.monitor.batch_interval,
                 "poll_interval": self.monitor.poll_interval,
@@ -1570,7 +1570,7 @@ class FileMonitorService:
             
             return {
                 "success": True,
-                "message": "File monitor stopped",
+                "message": "File/folder monitor stopped",
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
