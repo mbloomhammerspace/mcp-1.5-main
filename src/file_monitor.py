@@ -352,7 +352,7 @@ class FileMonitor:
                         "ingest_time": ingest_time
                     }
                     # Write JSON event to log
-                    with open(log_file, 'a') as f:
+                    with open(log_file, 'a', encoding='utf-8') as f:
                         f.write(json.dumps(event_data) + '\n')
                 
             except Exception as e:
@@ -458,7 +458,7 @@ class FileMonitor:
                         "size_bytes": os.path.getsize(file_path),
                         "ingest_time": datetime.now().isoformat()
                     }
-                    with open(log_file, 'a') as f:
+                    with open(log_file, 'a', encoding='utf-8') as f:
                         f.write(json.dumps(event_data) + '\n')
         
         except Exception as e:
@@ -767,7 +767,7 @@ class FileMonitor:
                     "collection_name": collection_name,
                     "ingest_time": datetime.now().isoformat()
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 logger.info(f"📁 FOLDER INGEST SUCCESS: {folder_path} → {len(supported_files)} files deployed to {collection_name}")
@@ -800,7 +800,7 @@ class FileMonitor:
                     "error": "Failed to create or deploy job",
                     "ingest_time": datetime.now().isoformat()
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 logger.error(f"❌ FOLDER INGEST FAILURE: {folder_path} → Failed to create or deploy job")
@@ -1039,7 +1039,7 @@ echo "Note: ingestion is async; allow processing time."
             }
             
             # Write JSON event to log
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
             if success:
@@ -1085,7 +1085,7 @@ echo "Note: ingestion is async; allow processing time."
             }
             
             # Write JSON event to log
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
             if success:
@@ -1545,7 +1545,7 @@ echo "Note: ingestion is async; allow processing time."
                     "total_files": len(tagged_files),
                     "message": f"{success_count} files with tag '{tag_name}' promoted to tier0 for processing"
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return True
@@ -1595,7 +1595,7 @@ echo "Note: ingestion is async; allow processing time."
                     "total_files": len(tagged_files),
                     "message": f"{success_count} files with tag '{tag_name}' demoted from tier0 after embeddings confirmed"
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return True
@@ -1652,7 +1652,7 @@ echo "Note: ingestion is async; allow processing time."
                     "status": "SUCCESS",
                     "message": f"Folder promoted to tier0 for high-performance processing"
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return True
@@ -1669,7 +1669,7 @@ echo "Note: ingestion is async; allow processing time."
                     "status": "FAILED",
                     "error": result.stderr
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return False
@@ -1687,7 +1687,7 @@ echo "Note: ingestion is async; allow processing time."
                 "status": "ERROR",
                 "error": str(e)
             }
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
             return False
@@ -1714,7 +1714,7 @@ echo "Note: ingestion is async; allow processing time."
                     "status": "SUCCESS",
                     "message": f"Folder demoted from tier0 after embeddings confirmed in Milvus"
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return True
@@ -1731,7 +1731,7 @@ echo "Note: ingestion is async; allow processing time."
                     "status": "FAILED",
                     "error": result.stderr
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return False
@@ -1749,7 +1749,7 @@ echo "Note: ingestion is async; allow processing time."
                 "status": "ERROR",
                 "error": str(e)
             }
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
             return False
@@ -1776,7 +1776,7 @@ echo "Note: ingestion is async; allow processing time."
                     "status": "SUCCESS",
                     "message": f"File demoted from tier0 after embeddings confirmed in Milvus"
                 }
-                with open(log_file, 'a') as f:
+                with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event_data) + '\n')
                 
                 return True
@@ -1812,7 +1812,7 @@ echo "Note: ingestion is async; allow processing time."
             }
             
             # Write JSON event to log
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
             if success:
@@ -1859,7 +1859,7 @@ echo "Note: ingestion is async; allow processing time."
             }
             
             # Write JSON event to log
-            with open(log_file, 'a') as f:
+            with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(event_data) + '\n')
             
             logger.info(f"🎯 MILVUS EMBEDDINGS CONFIRMED: {filename} → Verified in collection {collection_name}")

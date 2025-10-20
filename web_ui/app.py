@@ -536,8 +536,13 @@ def get_ingest_events():
         events = []
         
         # Read file in reverse order to get most recent events first
-        with open(log_file, 'r') as f:
-            lines = f.readlines()
+        try:
+            with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+        except UnicodeDecodeError:
+            # Fallback to latin-1 encoding if utf-8 fails
+            with open(log_file, 'r', encoding='latin-1', errors='replace') as f:
+                lines = f.readlines()
         
         # Parse events from newest to oldest
         for line in reversed(lines):
@@ -596,17 +601,28 @@ def stream_ingest_events():
         
         # Seek to end of file
         if log_file.exists():
-            with open(log_file, 'r') as f:
-                f.seek(0, 2)  # Seek to end
-                last_position = f.tell()
+            try:
+                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                    f.seek(0, 2)  # Seek to end
+                    last_position = f.tell()
+            except UnicodeDecodeError:
+                with open(log_file, 'r', encoding='latin-1', errors='replace') as f:
+                    f.seek(0, 2)  # Seek to end
+                    last_position = f.tell()
         
         while True:
             try:
                 if log_file.exists():
-                    with open(log_file, 'r') as f:
-                        f.seek(last_position)
-                        new_lines = f.readlines()
-                        last_position = f.tell()
+                    try:
+                        with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                            f.seek(last_position)
+                            new_lines = f.readlines()
+                            last_position = f.tell()
+                    except UnicodeDecodeError:
+                        with open(log_file, 'r', encoding='latin-1', errors='replace') as f:
+                            f.seek(last_position)
+                            new_lines = f.readlines()
+                            last_position = f.tell()
                         
                         for line in new_lines:
                             line = line.strip()
@@ -648,8 +664,13 @@ def get_events():
         
         events = []
         try:
-            with open(log_file, 'r') as f:
-                lines = f.readlines()
+            try:
+                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = f.readlines()
+            except UnicodeDecodeError:
+                # Fallback to latin-1 encoding if utf-8 fails
+                with open(log_file, 'r', encoding='latin-1', errors='replace') as f:
+                    lines = f.readlines()
                 
             # Parse JSON events from log file
             for line in lines[-limit:]:  # Get last N lines
