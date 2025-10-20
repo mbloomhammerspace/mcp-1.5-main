@@ -337,6 +337,10 @@ class FileMonitor:
                 
                 # Only emit detailed event data to log file for successfully tagged files
                 if tagged:
+                    # Apply alpha site/tier1 placement for initial tagging (all files)
+                    if self.apply_alpha_site_placement(file_path):
+                        logger.info(f"🎯 ALPHA SITE PLACEMENT: {file_path} → Placed on alpha site/tier1")
+                    
                     event_data = {
                         "timestamp": ingest_time,
                         "event_type": "NEW_FILES",
@@ -655,6 +659,10 @@ class FileMonitor:
         """Trigger an nv-ingest job for a single file. Returns (success, collection_name)."""
         try:
             logger.info(f"🚀 Triggering nv-ingest job for: {file_path}")
+            
+            # Apply tier0 objective for high-performance access during embedding
+            if self.apply_tier0_objective_single_file(file_path):
+                logger.info(f"🎯 TIER0 PROMOTION: {file_path} → Moved to tier0 for embedding")
             
             # Get the collection name first
             collection_name = self.get_next_collection_name()
@@ -1148,11 +1156,14 @@ echo "Note: ingestion is async; allow processing time."
                 self.emit_milvus_embeddings_confirmed(file_path, collection_name)
                 
                 # Remove Place-on-tier0 objective after embeddings are confirmed in Milvus
-                # Only do this for folders (directories), not individual files
-                # Check if we've already demoted this folder to prevent duplicates
-                if os.path.isdir(file_path) and file_path not in self.tier0_demoted_folders:
-                    self.remove_tier0_objective(file_path, collection_name)
-                    self.tier0_demoted_folders.add(file_path)
+                if os.path.isdir(file_path):
+                    # For folders, check if we've already demoted this folder to prevent duplicates
+                    if file_path not in self.tier0_demoted_folders:
+                        self.remove_tier0_objective(file_path, collection_name)
+                        self.tier0_demoted_folders.add(file_path)
+                else:
+                    # For individual files, remove tier0 objective
+                    self.remove_tier0_objective_single_file(file_path, collection_name)
                 
                 return True
             
@@ -1380,6 +1391,43 @@ echo "Note: ingestion is async; allow processing time."
             logger.error(f"❌ Error tagging collectionid for {file_path}: {e}")
             return False
     
+    def apply_alpha_site_placement(self, file_path: str) -> bool:
+        """Apply alpha site/tier1 placement to a file/folder."""
+        try:
+            cmd = [self.hs_cli, "tag", "set", "Place-on-alpha-site", file_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(file_path))
+            
+            if result.returncode == 0:
+                logger.info(f"✅ ALPHA SITE PLACEMENT SUCCESS: {file_path} → Placed on alpha site/tier1")
+                return True
+            else:
+                logger.error(f"❌ Failed to apply alpha site placement to {file_path}: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error applying alpha site placement to {file_path}: {e}")
+            return False
+
+    def apply_tier0_objective_single_file(self, file_path: str) -> bool:
+        """Apply Place-on-tier0 objective to a single file for high-performance access during processing."""
+        try:
+            logger.info(f"🎯 TIER0 PROMOTION: Applying Place-on-tier0 objective to {file_path}")
+            
+            # Use hs objective add to apply Place-on-tier0 objective
+            obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "add", "Place-on-tier0", file_path]
+            result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logger.info(f"✅ TIER0 PROMOTION SUCCESS: {file_path} → Place-on-tier0 objective applied")
+                return True
+            else:
+                logger.error(f"❌ Failed to apply Place-on-tier0 objective to {file_path}: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error applying Place-on-tier0 objective to {file_path}: {e}")
+            return False
+
     def apply_tier0_objective(self, folder_path: str, collection_name: str) -> bool:
         """Apply Place-on-tier0 objective to a folder for high-performance access during processing."""
         try:
@@ -1505,6 +1553,40 @@ echo "Note: ingestion is async; allow processing time."
             with open(log_file, 'a') as f:
                 f.write(json.dumps(event_data) + '\n')
             
+            return False
+
+    def remove_tier0_objective_single_file(self, file_path: str, collection_name: str) -> bool:
+        """Remove Place-on-tier0 objective from a single file after embeddings are confirmed in Milvus."""
+        try:
+            logger.info(f"🎯 TIER0 DEMOTION: Removing Place-on-tier0 objective from {file_path}")
+            
+            # Use hs objective delete to remove Place-on-tier0 objective
+            obj_cmd = ["/home/ubuntu/.local/bin/hs", "objective", "delete", "Place-on-tier0", file_path]
+            result = subprocess.run(obj_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logger.info(f"✅ TIER0 DEMOTION SUCCESS: {file_path} → Place-on-tier0 objective removed")
+                
+                # Log to debug log
+                event_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "event_type": "TIER0_DEMOTION",
+                    "file_path": file_path,
+                    "collection_name": collection_name,
+                    "objective": "Place-on-tier0",
+                    "status": "SUCCESS",
+                    "message": f"File demoted from tier0 after embeddings confirmed in Milvus"
+                }
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(event_data) + '\n')
+                
+                return True
+            else:
+                logger.error(f"❌ TIER0 DEMOTION FAILED: {file_path} → {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error removing tier0 objective from {file_path}: {e}")
             return False
     
     def emit_embedding_completion_event(self, file_path: str, success: bool, collection_name: str = None, milvus_verified: bool = False):
