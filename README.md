@@ -1,13 +1,13 @@
-# MCP 1.5 - Hammerspace Storage Management with NVIDIA + MCP
+# MCP 1.5 - Advanced Hammerspace Storage Management with AI
 
-A production-ready Model Context Protocol (MCP) server for Hammerspace storage management with natural language interface powered by Claude AI and NVIDIA integration.
+A production-ready Model Context Protocol (MCP) server for Hammerspace storage management with natural language interface, automatic file ingestion, and comprehensive monitoring capabilities.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Linux system
+- Linux system (Ubuntu 20.04+ recommended)
 - Hammerspace storage cluster (HSTK CLI installed)
 - Anthropic API key (for natural language UI)
 - NVIDIA API key (optional, for AI features)
@@ -47,38 +47,47 @@ A production-ready Model Context Protocol (MCP) server for Hammerspace storage m
    NVIDIA_API_KEY=your_nvidia_key_here
    ```
 
-4. **Start the Web UI**:
+4. **Start all services with one command**:
    ```bash
-   cd web_ui
-   python app.py
+   ./start_all_services.sh start
    ```
    
-   Access at: `http://localhost:5000`
+   Access Web UI at: `http://localhost:5000`
 
 ## 📋 Features
 
-### Natural Language Interface
+### 🤖 Natural Language Interface
 - **Web-based UI** powered by Claude AI at `http://localhost:5000`
 - **Direct MCP integration** for all Hammerspace operations
 - **Real-time debug log viewer** at `/debug`
 - **File ingest monitor dashboard** at `/monitor`
 - **Action-oriented responses** - executes commands, reports results
 
-### 🆕 Automatic File Ingestion System
+### 📁 Advanced File Ingestion System
+- **Multi-format support** - BMP, DOCX, HTML, JPEG, JSON, MD, PDF, PNG, PPTX, SH, TIFF, TXT, MP3
 - **Real-time file monitoring** - Polling-based detection on NFS 4.2 mounts
-- **Folder-based processing** - New folders trigger batch processing of all PDFs
-- **Kubernetes job deployment** - Automatic PDF ingestion jobs with ConfigMaps
+- **Folder-based processing** - New folders trigger batch processing of all supported files
+- **Kubernetes job deployment** - Automatic file ingestion jobs with ConfigMaps
 - **Milvus vector database integration** - Automatic embedding generation and storage
 - **Intelligent collection naming** - Collections named after folders or sequential numbering
-- **Retroactive tagging support** - Configurable time windows for processing existing files
+- **Tag-based tier management** - Automatic tier0 promotion for embedding files
 - **Event streaming** - Real-time monitoring of ingestion pipeline
 
-### File Ingestion Monitoring UI
+### 📊 Comprehensive Monitoring UI
 - **Real-time event streaming** - Watch files being ingested live
 - **Event filtering** - Filter by event type, file pattern, or timestamp
 - **Toast notifications** - Get notified when new files arrive
 - **Status dashboard** - Monitor service health, file counts, CPU usage
 - **Interactive UI** - Beautiful, modern interface for tracking ingestion pipelines
+- **Multi-service monitoring** - Track all MCP servers and services
+
+### 🔧 Persistent Service Management
+- **Unified startup script** - Start all services with one command
+- **Screen session persistence** - Services survive SSH disconnections
+- **Auto-restart capability** - Services automatically restart if they crash
+- **Systemd integration** - Optional auto-start on boot
+- **Comprehensive logging** - Detailed logs for all services
+- **Health monitoring** - Real-time service status and port monitoring
 
 ### API Endpoints
 - **`/api/monitor/status`** - Get monitor service status
@@ -107,7 +116,7 @@ All tools use **real HSTK CLI commands** (no mock data):
 - **Tag-based workflows** - Tag files and manage them as collections
 - **Intelligent batching** - Groups file events (15 sec) or processes immediately if traffic is light
 
-## 🆕 Automatic File Ingestion Workflow
+## 🆕 Advanced File Ingestion Workflow
 
 ### How It Works
 
@@ -115,20 +124,25 @@ All tools use **real HSTK CLI commands** (no mock data):
 2. **Tagging**: New files are automatically tagged with:
    - `user.ingestid=<md5hash>` - MD5 hash for deduplication
    - `user.mimeid=<mimetype>` - MIME type for classification
-3. **PDF Processing**: PDF files trigger Kubernetes ingestion jobs
+   - `user.embedding` - Tag for files requiring embedding
+3. **Multi-format Processing**: All supported file types trigger Kubernetes ingestion jobs
 4. **Collection Management**: Files are organized into Milvus collections:
    - **Folder-based**: Collections named after folder (e.g., `cold_0011`)
    - **Sequential**: Collections named `intel_1`, `intel_2`, etc.
-5. **Embedding Generation**: PDFs are processed into vector embeddings
-6. **Storage**: Embeddings stored in Milvus for semantic search
+5. **Tier Management**: Files tagged for embedding are automatically promoted to tier0
+6. **Embedding Generation**: Files are processed into vector embeddings
+7. **Storage**: Embeddings stored in Milvus for semantic search
+8. **Tier Demotion**: After embedding, files are moved back to default tier
 
 ### Folder Processing
 
 When a new folder is detected:
-- All PDF files in the folder are processed as a batch
+- All supported files in the folder are processed as a batch
 - A single Milvus collection is created named after the folder
 - Collection names are sanitized (e.g., `cold-0011` → `cold_0011`)
 - All files in the folder are uploaded to the same collection
+- Files are tagged with `embedding` and promoted to tier0 for processing
+- After embedding, tier0 objective is removed
 
 ### Configuration
 
@@ -136,7 +150,8 @@ The file monitor supports:
 - **Polling intervals**: 5 seconds (fast) during business hours, 30 seconds during retroactive hours
 - **Retroactive tagging**: Configurable time windows (default: disabled for testing)
 - **Path monitoring**: Monitors `/mnt/anvil/hub/` by default
-- **File filtering**: Only processes PDF files for ingestion
+- **File filtering**: Processes all supported file types (BMP, DOCX, HTML, JPEG, JSON, MD, PDF, PNG, PPTX, SH, TIFF, TXT, MP3)
+- **Recursive folder tagging**: Tags entire folder hierarchies for 40x performance improvement
 
 ### Kubernetes Integration
 
@@ -382,32 +397,49 @@ curl http://localhost:5000/api/monitor/events
 cp test.pdf /mnt/anvil/hub/
 ```
 
-## 🛠️ Management
+## 🛠️ Service Management
 
-### Start Services
-
-```bash
-# Web UI (default port 5000)
-cd web_ui
-source ../venv/bin/activate
-python app.py
-
-# Access at http://localhost:5000
-# Debug logs at http://localhost:5000/debug
-```
-
-### 🆕 Start File Monitor
+### Unified Service Management
 
 ```bash
-# Run as standalone daemon
-python3 src/file_monitor_daemon.py
+# Start all services with one command
+./start_all_services.sh start
 
-# Or run in background
-python3 src/file_monitor_daemon.py > logs/file_monitor.log 2>&1 &
+# Check service status
+./start_all_services.sh status
 
-# Check status
-ps aux | grep file_monitor_daemon
+# Stop all services
+./start_all_services.sh stop
+
+# Restart all services
+./start_all_services.sh restart
 ```
+
+### Individual Service Management
+
+```bash
+# View logs for specific services
+./start_all_services.sh logs web-ui
+./start_all_services.sh logs file-monitor
+./start_all_services.sh logs hammerspace-mcp
+./start_all_services.sh logs milvus-mcp
+
+# Attach to service screen sessions
+./start_all_services.sh attach web-ui
+./start_all_services.sh attach file-monitor
+
+# Clean up old logs
+./start_all_services.sh cleanup
+```
+
+### Service URLs
+
+Once started, services are available at:
+- **Web UI**: http://localhost:5000
+- **Web UI (LAN)**: http://10.0.0.236:5000
+- **Hammerspace MCP**: stdio-based (no HTTP endpoint)
+- **Milvus MCP**: http://localhost:9902/sse (if Milvus is running)
+- **Kubernetes MCP**: http://localhost:9903/sse (not implemented)
 
 ### View Logs
 
@@ -480,6 +512,14 @@ Examples:
 
 ## 📚 Documentation
 
+### **🚀 Quick Start**
+- **[Quick Reference Guide](QUICK_REFERENCE.md)** - Your go-to guide for common operations
+- **[Service Management](SERVICE_MANAGEMENT.md)** - Complete service management guide
+
+### **🏗️ Architecture & API**
+- **[Architecture Documentation](ARCHITECTURE.md)** - Comprehensive system architecture
+- **[API Documentation](API_DOCUMENTATION.md)** - Complete API reference for all MCP servers
+
 ### **🔗 Integration Guides**
 - **[Integration Guide](docs/INTEGRATION_GUIDE.md)** - Connect to Cursor, Windsurf, NVIDIA Playground
 
@@ -516,6 +556,21 @@ For support and questions:
 - Review the troubleshooting section above
 
 ## 🎉 Recent Updates
+
+### 🆕 October 23, 2025 - Advanced Service Management + Multi-Format Support
+- ✅ **NEW**: Unified service management script (`start_all_services.sh`) for all MCP services
+- ✅ **NEW**: Screen session persistence - services survive SSH disconnections
+- ✅ **NEW**: Auto-restart capability for crashed services
+- ✅ **NEW**: Systemd integration for auto-start on boot
+- ✅ **NEW**: Multi-format file support (BMP, DOCX, HTML, JPEG, JSON, MD, PDF, PNG, PPTX, SH, TIFF, TXT, MP3)
+- ✅ **NEW**: Tag-based tier management with automatic tier0 promotion/demotion
+- ✅ **NEW**: Recursive folder tagging for 40x performance improvement
+- ✅ **NEW**: Enhanced event filtering and monitoring UI
+- ✅ **NEW**: Comprehensive health monitoring and port conflict resolution
+- ✅ **FIXED**: Unicode handling in logs and CLI output
+- ✅ **FIXED**: NFS timing issues with retry mechanisms
+- ✅ **FIXED**: Hammerspace CLI tag operations with fallback methods
+- ✅ **FIXED**: Individual file vs folder-level tagging optimization
 
 ### 🆕 October 16, 2025 - Automatic File Ingestion + Kubernetes + MCP
 - ✅ **NEW**: Complete automatic file ingestion system with Kubernetes integration

@@ -1,0 +1,2 @@
+milvus_uri: "http://10.0.0.25:30195"
+db_name: "default"

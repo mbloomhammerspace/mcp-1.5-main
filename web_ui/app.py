@@ -9,6 +9,7 @@ import json
 import logging
 import warnings
 from datetime import datetime
+import re
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, Response
 from anthropic import Anthropic
@@ -201,6 +202,235 @@ def monitor():
     """File ingest monitor page"""
     return render_template('monitor.html')
 
+@app.route('/api/debug', methods=['GET'])
+def api_debug():
+    """JSON list of recent scanned file events.
+    Combines:
+    - Structured JSON events from inotify.log (NEW_FILES/FILE_CREATED/FILE_TAGGED)
+    - Text 'Found supported file:' lines from file monitor logs as FILE_SCANNED entries
+    """
+    try:
+        base_logs = Path(__file__).parent.parent / 'logs'
+        events = []
+        lines_out = []
+
+        # Mirror the primary debug source verbatim (no filtering): file_monitor_daemon.log
+        daemon_log = base_logs / 'file_monitor_daemon.log'
+        if daemon_log.exists():
+            try:
+                with open(daemon_log, 'r', encoding='utf-8', errors='replace') as f:
+                    # Take a large recent slice to capture bursts
+                    raw = f.readlines()[-10000:]
+                # Prefix with filename to match /debug context
+                lines_out.extend([f"[file_monitor_daemon.log] " + l.rstrip('\n') for l in raw])
+            except Exception:
+                pass
+
+        # 2) Parse JSON events from inotify.log
+        inotify_path = base_logs / 'inotify.log'
+        if inotify_path.exists():
+            with open(inotify_path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()[-2000:]
+            for line in lines:
+                s = line.strip()
+                if not s or not s.startswith('{'):
+                    continue
+                try:
+                    evt = json.loads(s)
+                except Exception:
+                    continue
+                et = evt.get('event_type')
+                if et in ('NEW_FILES', 'FILE_CREATED', 'FILE_TAGGED'):
+                    file_path = evt.get('file_path') or evt.get('path') or ''
+                    parts = file_path.split('/') if file_path else []
+                    try:
+                        collection = parts[parts.index('hub') + 1] if 'hub' in parts else (parts[-2] if len(parts) >= 2 else None)
+                    except Exception:
+                        collection = parts[-1] if parts else None
+                    events.append({
+                        'event_type': 'NEW_FILES',
+                        'file_name': evt.get('file_name') or (file_path.rsplit('/',1)[-1] if file_path else ''),
+                        'file_path': file_path,
+                        'collection_name': collection,
+                        'timestamp': evt.get('timestamp') or evt.get('ingest_time')
+                    })
+
+        # 3) Parse text lines from file monitor log for granular per-file discoveries
+        # Attempt primary monitor log; fallback to web_ui.log if needed
+        # Parse granular per-file discoveries from daemon log specifically
+        if daemon_log.exists():
+            try:
+                with open(daemon_log, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = f.readlines()[-10000:]
+            except Exception:
+                lines = []
+            for line in lines:
+                # Example: 2025-10-25 19:19:11,931 - file_monitor - INFO - 📁 Found supported file: /mnt/anvil/hub/case-10027/Library/Cookies/file.txt
+                if 'Found supported file:' not in line and 'file_monitor' not in line:
+                    continue
+                # Extract timestamp and path
+                ts = line[:23].strip()
+                file_path = None
+                if 'Found supported file: ' in line:
+                    try:
+                        file_path = line.split('Found supported file: ', 1)[1].strip()
+                    except Exception:
+                        pass
+                if not file_path:
+                    # Try to extract a path-like token after INFO - 📁
+                    m = re.search(r"(/mnt/[^\s]+)", line)
+                    if m:
+                        file_path = m.group(1)
+                    else:
+                        continue
+                parts = file_path.split('/') if file_path else []
+                try:
+                    collection = parts[parts.index('hub') + 1] if 'hub' in parts else (parts[-2] if len(parts) >= 2 else None)
+                except Exception:
+                    collection = parts[-1] if parts else None
+                events.append({
+                    'event_type': 'FILE_SCANNED',
+                    'file_name': file_path.rsplit('/',1)[-1] if file_path else '',
+                    'file_path': file_path,
+                    'collection_name': collection,
+                    'timestamp': ts
+                })
+
+        # Sort newest first by timestamp string when present
+        events.sort(key=lambda e: e.get('timestamp') or '', reverse=True)
+        # Trim raw lines to last N overall
+        if len(lines_out) > 1000:
+            lines_out = lines_out[-1000:]
+        resp = jsonify({ 'count': len(events), 'events': events, 'lines': lines_out, 'lines_count': len(lines_out) })
+        resp.headers.add('Access-Control-Allow-Origin', '*')
+        resp.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        resp.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        return resp
+    except Exception as e:
+        return jsonify({ 'count': 0, 'events': [], 'error': str(e) }), 500
+
+@app.route('/api/debug/stream', methods=['GET'])
+def api_debug_stream():
+    """SSE stream of scanned file events (NEW_FILES + FILE_SCANNED)."""
+    base_logs = Path(__file__).parent.parent / 'logs'
+    inotify_path = base_logs / 'inotify.log'
+    monitor_paths = [
+        base_logs / 'file_monitor_daemon.log',  # primary granular source
+        base_logs / 'file_monitor.log',
+        base_logs / 'retroactive_fully_disabled.log',
+        base_logs / 'web_ui.log'
+    ]
+
+    def snapshot_events():
+        payloads = []
+        # Only consider logs updated within the last 30 minutes
+        import time
+        now = time.time()
+        freshness_s = 30 * 60
+
+        # Snapshot from inotify (JSON)
+        if inotify_path.exists() and (now - inotify_path.stat().st_mtime <= freshness_s):
+            try:
+                with open(inotify_path, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = f.readlines()[-200:]
+                for line in lines:
+                    s = line.strip()
+                    if not s or not s.startswith('{'):
+                        continue
+                    try:
+                        evt = json.loads(s)
+                    except Exception:
+                        continue
+                    et = evt.get('event_type')
+                    if et in ('NEW_FILES', 'FILE_CREATED', 'FILE_TAGGED'):
+                        file_path = evt.get('file_path') or evt.get('path') or ''
+                        parts = file_path.split('/') if file_path else []
+                        try:
+                            collection = parts[parts.index('hub') + 1] if 'hub' in parts else (parts[-2] if len(parts) >= 2 else None)
+                        except Exception:
+                            collection = parts[-1] if parts else None
+                        payloads.append({
+                            'event_type': 'NEW_FILES',
+                            'file_name': evt.get('file_name') or (file_path.rsplit('/',1)[-1] if file_path else ''),
+                            'file_path': file_path,
+                            'collection_name': collection,
+                            'timestamp': evt.get('timestamp') or evt.get('ingest_time')
+                        })
+            except Exception:
+                pass
+        # Snapshot from monitor logs (text)
+        for mp in monitor_paths:
+            if not mp.exists():
+                continue
+            try:
+                # Do not freshness-filter daemon log; it's our primary granular feed
+                if mp.name != 'file_monitor_daemon.log' and (now - mp.stat().st_mtime > freshness_s):
+                    continue
+            except Exception:
+                pass
+            try:
+                with open(mp, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = f.readlines()[-500:]
+            except Exception:
+                continue
+            for line in lines:
+                if 'Found supported file:' not in line and 'file_monitor' not in line:
+                    continue
+                ts = line[:23].strip()
+                file_path = None
+                if 'Found supported file: ' in line:
+                    try:
+                        file_path = line.split('Found supported file: ', 1)[1].strip()
+                    except Exception:
+                        pass
+                if not file_path:
+                    m = re.search(r"(/mnt/[^\s]+)", line)
+                    if m:
+                        file_path = m.group(1)
+                    else:
+                        continue
+                parts = file_path.split('/') if file_path else []
+                try:
+                    collection = parts[parts.index('hub') + 1] if 'hub' in parts else (parts[-2] if len(parts) >= 2 else None)
+                except Exception:
+                    collection = parts[-1] if parts else None
+                payloads.append({
+                    'event_type': 'FILE_SCANNED',
+                    'file_name': file_path.rsplit('/',1)[-1] if file_path else '',
+                    'file_path': file_path,
+                    'collection_name': collection,
+                    'timestamp': ts
+                })
+        return payloads
+
+    def generate():
+        # Initial burst
+        initial = snapshot_events()
+        yield f"data: {json.dumps({'count': len(initial), 'events': initial})}\n\n"
+
+        # Tail inotify and monitor logs for new lines
+        try:
+            import time
+            # Keep simple polling to avoid blocking tails
+            while True:
+                payloads = snapshot_events()
+                if payloads:
+                    yield f"data: {json.dumps({'count': len(payloads), 'events': payloads})}\n\n"
+                time.sleep(2)
+        except GeneratorExit:
+            return
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    resp = Response(generate(), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Connection'] = 'keep-alive'
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+    """File ingest monitor page"""
+    return render_template('monitor.html')
+
 @app.route('/events')
 def events():
     """Event emission console page"""
@@ -216,7 +446,8 @@ def stream_logs():
         # Read from actual log files
         log_files = [
             '/home/ubuntu/mcp-1.5-main/logs/retroactive_fully_disabled.log',
-            '/home/ubuntu/mcp-1.5-main/logs/web_ui.log'
+            '/home/ubuntu/mcp-1.5-main/logs/web_ui.log',
+            '/home/ubuntu/mcp-1.5-main/logs/file_monitor.log'
         ]
         
         # Start with recent history from the file monitor log (which contains the tagging activity)
@@ -228,9 +459,13 @@ def stream_logs():
         except:
             pass
         
-        # Now tail -f for real-time updates from the file monitor log
+        # Now tail -f for real-time updates from all key logs
+        follow_files = [
+            '/home/ubuntu/mcp-1.5-main/logs/inotify.log',
+            '/home/ubuntu/mcp-1.5-main/logs/file_monitor.log'
+        ]
         proc = subprocess.Popen(
-            ['tail', '-f', '/home/ubuntu/mcp-1.5-main/logs/inotify.log'],
+            ['tail', '-f'] + follow_files,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -703,20 +938,28 @@ def get_events():
         # Sort events by timestamp (newest first)
         events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         
-        return jsonify({
+        response = jsonify({
             'success': True,
             'events': events,
             'count': len(events),
             'total_lines_processed': len(lines) if 'lines' in locals() else 0
         })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        return response
         
     except Exception as e:
         logger.error(f"Error getting events: {str(e)}")
-        return jsonify({
+        response = jsonify({
             'success': False,
             'error': str(e),
             'events': []
-        }), 500
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        return response, 500
 
 @app.route('/api/mcp/status')
 def api_mcp_status():
@@ -905,4 +1148,56 @@ if __name__ == '__main__':
         print(f"⚠️ File monitor not available: {e}")
     
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+
+
+@app.route('/json-events', methods=['GET'])
+def stream_json_events():
+    """Stream MCP events as Server-Sent Events (SSE)"""
+    def generate_events():
+        # Send initial connection event
+        yield f"data: {json.dumps({'type': 'connection', 'message': 'Connected to MCP events stream', 'timestamp': datetime.now().isoformat()})}\n\n"
+        
+        # Read the inotify log file
+        log_file = Path(__file__).parent.parent / 'logs' / 'inotify.log'
+        
+        if not log_file.exists():
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Log file not found', 'timestamp': datetime.now().isoformat()})}\n\n"
+            return
+        
+        last_position = 0
+        while True:
+            try:
+                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                    f.seek(last_position)
+                    new_lines = f.readlines()
+                    last_position = f.tell()
+                    
+                    for line in new_lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                            
+                        try:
+                            event = json.loads(line)
+                            # Send the event as SSE
+                            yield f"data: {json.dumps(event)}\n\n"
+                        except json.JSONDecodeError:
+                            # Skip non-JSON lines
+                            continue
+                            
+            except Exception as e:
+                logger.error(f"Error reading log file: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e), 'timestamp': datetime.now().isoformat()})}\n\n"
+                break
+                
+            # Wait before checking for new events
+            import time
+            time.sleep(2)
+    
+    return Response(generate_events(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+    })
 
